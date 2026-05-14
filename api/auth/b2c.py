@@ -57,6 +57,15 @@ def validate_token(token: str) -> dict:
     """
     if DEV_MODE:
         logger.warning("DEV_MODE: skipping B2C JWT signature validation")
+        # Accept special sentinel tokens for local / demo use
+        if token in ("dev", "dev-token", "demo"):
+            return {
+                "oid": "dev-user-001",
+                "sub": "dev-user-001",
+                "emails": ["dev@anthene.local"],
+                "name": "Dev User",
+                "extension_Role": "admin",
+            }
         try:
             payload = jwt.decode(token, options={"verify_signature": False})
             return payload

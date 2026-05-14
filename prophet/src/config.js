@@ -23,5 +23,5 @@ export const loginRequest = {
   ],
 }
 
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+export const API_BASE = import.meta.env.VITE_API_URL || 'https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io'
 export const DEV_MODE = !import.meta.env.VITE_B2C_CLIENT_ID
