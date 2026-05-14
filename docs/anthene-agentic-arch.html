@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anthene Agentic — Arkkitehtuuri</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080d16;color:#e2e8f0;min-height:100vh}
+
+/* ─── Lock ─── */
+#lock{position:fixed;inset:0;background:#080d16;z-index:9999;display:flex;align-items:center;justify-content:center}
+.lock-card{background:#0f1a2e;border:1px solid #1e3a5f;border-radius:20px;padding:48px 56px;text-align:center;max-width:380px;width:90%}
+.lock-hex{font-size:3rem;margin-bottom:1rem;filter:drop-shadow(0 0 20px #6c63ff)}
+.lock-card h1{font-size:1.3rem;font-weight:800;color:#7c6fcd;margin-bottom:.3rem}
+.lock-card p{color:#4a6080;font-size:.85rem;margin-bottom:1.5rem}
+.lock-input{width:100%;background:#07111f;border:1px solid #1e3a5f;border-radius:10px;color:#e2e8f0;padding:.75rem 1rem;font-size:1rem;text-align:center;letter-spacing:.2em;margin-bottom:1rem;outline:none;transition:border-color .2s}
+.lock-input:focus{border-color:#7c6fcd}
+.lock-btn{width:100%;background:linear-gradient(135deg,#6c63ff,#8b5cf6);border:none;border-radius:10px;color:#fff;font-size:1rem;font-weight:700;padding:.75rem;cursor:pointer;transition:opacity .2s}
+.lock-btn:hover{opacity:.85}
+.lock-err{color:#ef4444;font-size:.8rem;margin-top:.75rem;display:none}
+#portal{display:none}
+
+/* ─── Topbar ─── */
+.topbar{background:linear-gradient(135deg,#0b1628,#0f1e3a);border-bottom:1px solid #1e3a5f;padding:1rem 2rem;display:flex;align-items:center;gap:1rem;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.topbar-hex{font-size:1.8rem;filter:drop-shadow(0 0 10px #6c63ff88)}
+.topbar-name{font-size:1.1rem;font-weight:800;background:linear-gradient(135deg,#7c6fcd,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.topbar-sub{font-size:.68rem;color:#3a5070;letter-spacing:.12em;text-transform:uppercase;margin-top:.1rem}
+.topbar-badges{margin-left:auto;display:flex;align-items:center;gap:.6rem}
+.badge{border-radius:20px;padding:.2rem .75rem;font-size:.72rem;font-weight:700}
+.badge-live{background:#10b98120;border:1px solid #10b98150;color:#34d399}
+.badge-ver{background:#7c6fcd20;border:1px solid #7c6fcd40;color:#a29ae0}
+.back-link{color:#4a6080;font-size:.78rem;text-decoration:none;padding:.3rem .75rem;border:1px solid #1e3a5f;border-radius:8px;transition:all .2s}
+.back-link:hover{color:#a29ae0;border-color:#7c6fcd50}
+
+.page{max-width:1400px;margin:0 auto;padding:2rem}
+
+/* ─── Quick Links (top) ─── */
+.quicklinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.85rem;margin-bottom:2.5rem}
+.ql-card{display:flex;align-items:center;gap:.85rem;background:#0f1a2e;border:1px solid #1e3a5f;border-radius:14px;padding:1rem 1.25rem;text-decoration:none;color:inherit;transition:all .2s;position:relative;overflow:hidden}
+.ql-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--ql-c)08,transparent);pointer-events:none}
+.ql-card:hover{border-color:var(--ql-c);transform:translateY(-2px);box-shadow:0 8px 30px var(--ql-c)20}
+.ql-icon{font-size:1.8rem;flex-shrink:0}
+.ql-label{font-size:.88rem;font-weight:700;color:#e2e8f0;margin-bottom:.1rem}
+.ql-desc{font-size:.72rem;color:#4a6080}
+.ql-arrow{margin-left:auto;color:#2a4060;font-size:1rem;transition:color .2s}
+.ql-card:hover .ql-arrow{color:var(--ql-c)}
+
+/* ─── Section title ─── */
+.sec{margin-bottom:2.5rem}
+.sec-title{font-size:.78rem;font-weight:700;color:#3a5070;letter-spacing:.1em;text-transform:uppercase;margin-bottom:1.25rem;display:flex;align-items:center;gap:.75rem}
+.sec-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,#1e3a5f22,transparent)}
+.sec-title-icon{font-size:.95rem}
+
+/* ─── Arch diagram ─── */
+.arch-wrap{background:#0a1525;border:1px solid #1e3a5f;border-radius:16px;padding:1.5rem;margin-bottom:.5rem}
+.arch-layer{border-radius:10px;padding:.9rem 1.1rem;border:1px solid;margin-bottom:.6rem}
+.arch-label{font-size:.67rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.55rem}
+.arch-comps{display:flex;flex-wrap:wrap;gap:.45rem}
+.ac{background:#07111f;border:1px solid;border-radius:7px;padding:.3rem .75rem;font-size:.76rem}
+.layer-fe{border-color:#7c6fcd40;background:#7c6fcd08}  .label-fe{color:#a29ae0}  .ac-fe{border-color:#7c6fcd30;color:#a29ae0}
+.layer-api{border-color:#3b82f640;background:#3b82f608}  .label-api{color:#60a5fa}  .ac-api{border-color:#3b82f630;color:#60a5fa}
+.layer-rt{border-color:#8b5cf640;background:#8b5cf608}  .label-rt{color:#c4b5fd}   .ac-rt{border-color:#8b5cf630;color:#c4b5fd}
+.layer-tools{border-color:#10b98140;background:#10b98108} .label-tools{color:#34d399} .ac-tools{border-color:#10b98130;color:#34d399}
+.layer-data{border-color:#f59e0b40;background:#f59e0b08} .label-data{color:#fbbf24}  .ac-data{border-color:#f59e0b30;color:#fbbf24}
+.layer-infra{border-color:#1e3a5f;background:#07111f}    .label-infra{color:#4a6080}  .ac-infra{border-color:#1e3a5f;color:#4a6080}
+.arch-arrow{text-align:center;font-size:1rem;color:#1e3a5f;margin:.1rem 0;letter-spacing:.5rem}
+.ac.live{border-color:#10b98150!important;color:#34d399!important}
+.ac.new{border-color:#f59e0b50!important;color:#fbbf24!important}
+.ac.ai{border-color:#8b5cf650!important;color:#c4b5fd!important}
+
+/* ─── Services grid ─── */
+.services-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:.9rem}
+.svc{background:#0f1a2e;border:1px solid #1e3a5f;border-radius:14px;padding:1.2rem 1.4rem;text-decoration:none;color:inherit;display:block;transition:all .2s}
+.svc:hover{border-color:#7c6fcd60;transform:translateY(-2px);box-shadow:0 8px 28px #7c6fcd12}
+.svc-head{display:flex;align-items:center;gap:.7rem;margin-bottom:.65rem}
+.svc-icon{font-size:1.5rem}
+.svc-name{font-size:.95rem;font-weight:700;color:#e2e8f0;flex:1}
+.env-tag{font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:20px;letter-spacing:.04em}
+.et-pub{background:#10b98115;color:#34d399;border:1px solid #10b98130}
+.et-int{background:#f59e0b15;color:#fbbf24;border:1px solid #f59e0b30}
+.et-api{background:#3b82f615;color:#60a5fa;border:1px solid #3b82f630}
+.svc-url{font-family:'Cascadia Code',monospace;font-size:.74rem;color:#6c63ff;background:#6c63ff10;border:1px solid #6c63ff25;border-radius:6px;padding:.25rem .6rem;margin-bottom:.65rem;word-break:break-all;display:block}
+.svc-desc{font-size:.8rem;color:#4a6080;line-height:1.5;margin-bottom:.65rem}
+.svc-tags{display:flex;flex-wrap:wrap;gap:.35rem}
+.stag{font-size:.67rem;background:#111e30;border:1px solid #1e3a5f;border-radius:20px;padding:.12rem .5rem;color:#3a5070}
+
+/* ─── API table ─── */
+.api-note{font-size:.8rem;color:#3a5070;margin-bottom:1.25rem}
+.api-note code{color:#7c6fcd;background:#7c6fcd12;padding:.1rem .4rem;border-radius:4px;font-family:monospace}
+table{width:100%;border-collapse:collapse;font-size:.81rem}
+th{background:#07111f;color:#3a5070;padding:.55rem .85rem;text-align:left;border:1px solid #1e3a5f;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+td{padding:.55rem .85rem;border:1px solid #111e30;vertical-align:middle}
+tr:hover td{background:#0d1828}
+.m{font-size:.68rem;font-weight:700;padding:.18rem .48rem;border-radius:5px;letter-spacing:.04em}
+.m-get{background:#10b98115;color:#34d399;border:1px solid #10b98130}
+.m-post{background:#3b82f615;color:#60a5fa;border:1px solid #3b82f630}
+.m-patch{background:#f59e0b15;color:#fbbf24;border:1px solid #f59e0b30}
+.m-del{background:#ef444415;color:#f87171;border:1px solid #ef444430}
+.ep{font-family:'Cascadia Code',monospace;color:#a29ae0;font-size:.79rem}
+.auth-t{font-size:.68rem;padding:.1rem .4rem;border-radius:4px}
+.a-bearer{background:#7c6fcd15;color:#a29ae0;border:1px solid #7c6fcd30}
+.a-admin{background:#ef444415;color:#f87171;border:1px solid #ef444430}
+.a-none{background:#111e30;color:#3a5070;border:1px solid #1e3a5f}
+.a-new{background:#f59e0b15;color:#fbbf24;border:1px solid #f59e0b30}
+.ep-desc{color:#4a6080}
+.new-row td{border-left:2px solid #f59e0b50}
+.new-label{font-size:.65rem;color:#fbbf24;background:#f59e0b10;border:1px solid #f59e0b30;border-radius:4px;padding:.1rem .35rem;margin-left:.4rem;vertical-align:middle}
+
+/* ─── Tools ─── */
+.tool-cats{display:flex;flex-direction:column;gap:1.25rem}
+.cat-block{background:#0f1a2e;border:1px solid #1e3a5f;border-radius:12px;padding:1.1rem 1.3rem}
+.cat-hdr{display:flex;align-items:center;gap:.65rem;margin-bottom:.85rem;padding-bottom:.6rem;border-bottom:1px solid #111e30}
+.cat-ic{font-size:1.25rem}
+.cat-nm{font-size:.9rem;font-weight:700;color:#e2e8f0}
+.cat-cnt{background:#111e30;border:1px solid #1e3a5f;border-radius:20px;padding:.1rem .5rem;font-size:.68rem;color:#3a5070}
+.tools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.6rem}
+.tool{background:#07111f;border:1px solid #111e30;border-radius:8px;padding:.8rem 1rem;transition:border-color .2s}
+.tool:hover{border-color:#1e3a5f}
+.tool-id{font-family:monospace;font-size:.72rem;color:#6c63ff;margin-bottom:.25rem}
+.tool-nm{font-size:.84rem;font-weight:700;color:#e2e8f0;margin-bottom:.25rem}
+.tool-dc{font-size:.75rem;color:#3a5070;line-height:1.4}
+
+/* ─── Auth section ─── */
+.auth-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.85rem}
+.auth-card{background:#0f1a2e;border:1px solid #1e3a5f;border-radius:12px;padding:1.1rem 1.3rem}
+.auth-card-head{display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem}
+.auth-role{font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:20px}
+.role-admin{background:#ef444420;color:#f87171;border:1px solid #ef444440}
+.role-editor{background:#3b82f620;color:#60a5fa;border:1px solid #3b82f640}
+.role-viewer{background:#10b98120;color:#34d399;border:1px solid #10b98140}
+.auth-user{font-size:.9rem;font-weight:700;color:#e2e8f0}
+.auth-pw{font-family:monospace;font-size:.85rem;color:#7c6fcd;background:#7c6fcd10;border:1px solid #7c6fcd25;border-radius:6px;padding:.25rem .6rem;margin-bottom:.5rem;display:block}
+.auth-perms{display:flex;flex-direction:column;gap:.2rem}
+.perm{font-size:.74rem;color:#4a6080;display:flex;align-items:center;gap:.4rem}
+.perm::before{content:'✓';color:#34d399;font-weight:700}
+.perm.no::before{content:'✗';color:#ef4444}
+
+/* ─── Infra ─── */
+.infra-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.85rem}
+.infra-card{background:#0f1a2e;border:1px solid #1e3a5f;border-radius:12px;padding:1.1rem 1.3rem}
+.infra-head{display:flex;align-items:center;gap:.65rem;margin-bottom:.65rem}
+.infra-icon{font-size:1.3rem}
+.infra-name{font-size:.9rem;font-weight:700;color:#e2e8f0}
+.infra-tier{font-size:.68rem;color:#3a5070;background:#111e30;border:1px solid #1e3a5f;border-radius:20px;padding:.1rem .5rem;margin-left:auto}
+.infra-detail{font-size:.78rem;color:#4a6080;line-height:1.5}
+.infra-detail b{color:#7c6fcd;font-weight:600}
+
+/* ─── Tabs ─── */
+.tabs{display:flex;gap:.25rem;margin-bottom:1.75rem;background:#07111f;border-radius:12px;padding:.3rem;width:fit-content;flex-wrap:wrap}
+.tab-btn{background:none;border:none;color:#3a5070;font-size:.82rem;padding:.45rem 1rem;border-radius:8px;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap}
+.tab-btn:hover{color:#e2e8f0}
+.tab-btn.active{background:#0f1a2e;color:#e2e8f0;font-weight:700;box-shadow:0 2px 8px #00000040}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* ─── Footer ─── */
+footer{text-align:center;padding:2rem;color:#1e3a5f;font-size:.78rem;border-top:1px solid #111e30;margin-top:1rem}
+footer strong{color:#3a5070}
+
+@media(max-width:768px){.quicklinks{grid-template-columns:1fr}.page{padding:1rem}.tabs{width:100%}}
+</style>
+</head>
+<body>
+
+<!-- Lock -->
+<div id="lock">
+  <div class="lock-card">
+    <div class="lock-hex">⚡</div>
+    <h1>Anthene Agentic</h1>
+    <p>Arkkitehtuuridokumentaatio · Syötä salasana</p>
+    <input id="pw" class="lock-input" type="password" placeholder="••••••••" autocomplete="off" autofocus
+      onkeydown="if(event.key==='Enter')checkPw()">
+    <button class="lock-btn" onclick="checkPw()">Avaa →</button>
+    <div id="lock-err" class="lock-err">Väärä salasana</div>
+  </div>
+</div>
+
+<div id="portal">
+
+<!-- Topbar -->
+<div class="topbar">
+  <span class="topbar-hex">⚡</span>
+  <div>
+    <div class="topbar-name">Anthene Agentic</div>
+    <div class="topbar-sub">Architecture · v2.0 · Sweden Central</div>
+  </div>
+  <div class="topbar-badges">
+    <a class="back-link" href="/portal.html">← Portal</a>
+    <span class="badge badge-live">🟢 LIVE</span>
+    <span class="badge badge-ver">May 2026</span>
+  </div>
+</div>
+
+<div class="page">
+
+<!-- ═══════════════════════════════════════════════════════
+     QUICK LINKS — näkymiin
+═══════════════════════════════════════════════════════ -->
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🔗</span> Nopeat linkit — kaikki näkymät</div>
+  <div class="quicklinks">
+
+    <a class="ql-card" href="https://agreeable-bay-0c9251203.7.azurestaticapps.net" target="_blank" style="--ql-c:#7c6fcd">
+      <span class="ql-icon">⚙️</span>
+      <div>
+        <div class="ql-label">Agent Creator</div>
+        <div class="ql-desc">Luo · muokkaa · testaa agentteja</div>
+      </div>
+      <span class="ql-arrow">↗</span>
+    </a>
+
+    <a class="ql-card" href="https://delightful-tree-02d1d8603.7.azurestaticapps.net" target="_blank" style="--ql-c:#3b82f6">
+      <span class="ql-icon">🏢</span>
+      <div>
+        <div class="ql-label">Operator Dashboard</div>
+        <div class="ql-desc">Operaattorinäkymä · Tilannekuva-kartta</div>
+      </div>
+      <span class="ql-arrow">↗</span>
+    </a>
+
+    <a class="ql-card" href="https://green-glacier-0ec1a7c03.7.azurestaticapps.net" target="_blank" style="--ql-c:#10b981">
+      <span class="ql-icon">✈️</span>
+      <div>
+        <div class="ql-label">Prophet · Lentoanalyysi</div>
+        <div class="ql-desc">Live ADS-B · AOI-analyysi · AI-chat</div>
+      </div>
+      <span class="ql-arrow">↗</span>
+    </a>
+
+    <a class="ql-card" href="https://green-glacier-0ec1a7c03.7.azurestaticapps.net/portal.html" target="_blank" style="--ql-c:#f59e0b">
+      <span class="ql-icon">🌍</span>
+      <div>
+        <div class="ql-label">Anthene Portal</div>
+        <div class="ql-desc">Tuoteperhe · molemmat ympäristöt</div>
+      </div>
+      <span class="ql-arrow">↗</span>
+    </a>
+
+    <a class="ql-card" href="https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io/docs" target="_blank" style="--ql-c:#8b5cf6">
+      <span class="ql-icon">📡</span>
+      <div>
+        <div class="ql-label">API · Swagger UI</div>
+        <div class="ql-desc">FastAPI-dokumentaatio · kaikki endpointit</div>
+      </div>
+      <span class="ql-arrow">↗</span>
+    </a>
+
+    <div class="ql-card" style="--ql-c:#ef4444;cursor:default">
+      <span class="ql-icon">🔒</span>
+      <div>
+        <div class="ql-label">Kirjautuminen</div>
+        <div class="ql-desc">admin / Jallukola &nbsp;·&nbsp; operaattori / Anthene2025</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('arch')">🏗️ Arkkitehtuuri</button>
+  <button class="tab-btn" onclick="showTab('services')">🌐 Palvelut</button>
+  <button class="tab-btn" onclick="showTab('api')">🔌 API-endpointit</button>
+  <button class="tab-btn" onclick="showTab('tools')">🛠️ Työkalukataloogi</button>
+  <button class="tab-btn" onclick="showTab('auth')">🔐 Pääsynhallinta</button>
+  <button class="tab-btn" onclick="showTab('infra')">☁️ Azure-infra</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: ARKKITEHTUURI
+═══════════════════════════════════════════════════════ -->
+<div id="tab-arch" class="tab-pane active">
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🏗️</span> Järjestelmäarkkitehtuuri</div>
+  <div class="arch-wrap">
+
+    <div class="arch-layer layer-fe">
+      <div class="arch-label label-fe">🖥️ Frontend — Azure Static Web Apps</div>
+      <div class="arch-comps">
+        <span class="ac ac-fe live">⚙️ Agent Creator</span>
+        <span class="ac ac-fe live">🏢 Operator Dashboard (Store)</span>
+        <span class="ac ac-fe live">✈️ Prophet · Lentoanalyysi</span>
+        <span class="ac ac-fe">🗺️ FlightMapView (MapLibre GL)</span>
+        <span class="ac ac-fe new">🪟 AoiWindow · 3-välilehti</span>
+        <span class="ac ac-fe new">🗺️ SituationalMap (Store)</span>
+        <span class="ac ac-fe new">✚ QuickAgentModal</span>
+        <span class="ac ac-fe">🤖 AgentConsultant · AOI-kartta</span>
+        <span class="ac ac-fe">👤 AdminPanel · käyttäjähallinta</span>
+        <span class="ac ac-fe new">🔐 DevLogin · kirjautumislomake</span>
+      </div>
+    </div>
+
+    <div class="arch-arrow">⬇ ⬇ ⬇</div>
+
+    <div class="arch-layer layer-api">
+      <div class="arch-label label-api">🔌 API — FastAPI · Azure Container App · Sweden Central</div>
+      <div class="arch-comps">
+        <span class="ac ac-api live">POST /api/auth/login</span>
+        <span class="ac ac-api live">GET /api/agents</span>
+        <span class="ac ac-api live">POST /api/agents</span>
+        <span class="ac ac-api live">PATCH/DELETE /api/agents/{id}</span>
+        <span class="ac ac-api live">GET /api/agents/store</span>
+        <span class="ac ac-api live">POST /api/run/{agent_id} · SSE</span>
+        <span class="ac ac-api live">POST /api/consult · AI-sparraus</span>
+        <span class="ac ac-api live">GET /api/tools</span>
+        <span class="ac ac-api new">POST /api/tools/call/{tool_id}</span>
+        <span class="ac ac-api live">GET/PATCH /api/users/me</span>
+        <span class="ac ac-api">JWT · HS256 + B2C RS256</span>
+      </div>
+    </div>
+
+    <div class="arch-arrow">⬇ ⬇ ⬇</div>
+
+    <div class="arch-layer layer-rt">
+      <div class="arch-label label-rt">🤖 Runtime — LangGraph · GPT-4o</div>
+      <div class="arch-comps">
+        <span class="ac ac-rt ai">LangGraph StateGraph</span>
+        <span class="ac ac-rt ai">ToolNode · ReAct loop</span>
+        <span class="ac ac-rt ai">SSE token streaming</span>
+        <span class="ac ac-rt ai">Multi-turn sessiot</span>
+        <span class="ac ac-rt ai">AOI context injection</span>
+        <span class="ac ac-rt ai">Azure OpenAI GPT-4o</span>
+        <span class="ac ac-rt">AI Foundry endpoint</span>
+      </div>
+    </div>
+
+    <div class="arch-arrow">⬇ ⬇ ⬇</div>
+
+    <div class="arch-layer layer-tools">
+      <div class="arch-label label-tools">🛠️ Tool Hub — 21 työkalua · Sisäinen Container App</div>
+      <div class="arch-comps">
+        <span class="ac ac-tools">✈️ ADS-B Exchange (4)</span>
+        <span class="ac ac-tools">🌊 MarineTraffic / AIS (3)</span>
+        <span class="ac ac-tools">🌦️ FMI Sää (3)</span>
+        <span class="ac ac-tools">🔥 EFFIS Tulipalot (2)</span>
+        <span class="ac ac-tools">🛰️ NASA FIRMS (2)</span>
+        <span class="ac ac-tools">📻 STUK Säteily (2)</span>
+        <span class="ac ac-tools">📡 Telegram (1)</span>
+        <span class="ac ac-tools">🗺️ Geocoding (1)</span>
+        <span class="ac ac-tools">🌐 Web Search (1)</span>
+        <span class="ac ac-tools">🧮 Calculator (1)</span>
+        <span class="ac ac-tools">📄 File Read (1)</span>
+      </div>
+    </div>
+
+    <div class="arch-arrow">⬇ ⬇ ⬇</div>
+
+    <div class="arch-layer layer-data">
+      <div class="arch-label label-data">💾 Data — Azure Cosmos DB (NoSQL) + Ulkoiset API:t</div>
+      <div class="arch-comps">
+        <span class="ac ac-data">agents</span>
+        <span class="ac ac-data">users</span>
+        <span class="ac ac-data">agent_runs</span>
+        <span class="ac ac-data">invites</span>
+        <span class="ac ac-data">ADS-B Exchange API</span>
+        <span class="ac ac-data">FMI Open Data WFS</span>
+        <span class="ac ac-data">MarineTraffic REST</span>
+        <span class="ac ac-data">EFFIS GeoServer</span>
+        <span class="ac ac-data">NASA FIRMS MODIS</span>
+        <span class="ac ac-data">STUK Dose Rates</span>
+      </div>
+    </div>
+
+    <div class="arch-arrow">⬇ ⬇ ⬇</div>
+
+    <div class="arch-layer layer-infra">
+      <div class="arch-label label-infra">☁️ Azure-infra — anthene-agentic-rg · Sweden Central</div>
+      <div class="arch-comps">
+        <span class="ac ac-infra">Azure Container Apps · greensea env</span>
+        <span class="ac ac-infra">Azure Container Registry · antheneagentic</span>
+        <span class="ac ac-infra">3× Azure Static Web Apps</span>
+        <span class="ac ac-infra">Azure Cosmos DB Serverless</span>
+        <span class="ac ac-infra">Azure OpenAI · gpt-4o</span>
+        <span class="ac ac-infra">Azure AD B2C (tulossa)</span>
+        <span class="ac ac-infra">VNet internal ingress</span>
+      </div>
+    </div>
+
+  </div>
+
+  <p style="font-size:.75rem;color:#1e3a5f;margin-top:.75rem">
+    <span style="color:#34d399;font-weight:700">● live</span>&ensp;tuotannossa&emsp;
+    <span style="color:#fbbf24;font-weight:700">● new</span>&ensp;lisätty tässä versiossa&emsp;
+    <span style="color:#c4b5fd;font-weight:700">● ai</span>&ensp;AI-runtime-komponentti
+  </p>
+</div>
+
+<!-- Data flow -->
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🔄</span> Datavirta — agentin suoritus</div>
+  <div style="background:#0a1525;border:1px solid #1e3a5f;border-radius:14px;padding:1.5rem;font-size:.83rem;color:#4a6080;line-height:2">
+    <span style="color:#a29ae0;font-weight:700">1. Käyttäjä</span> kirjoittaa kysymyksen Prophet/Store -näkymässä
+    &ensp;→&ensp;<span style="color:#60a5fa;font-weight:700">2. POST /api/run/{agent_id}</span> (Bearer JWT)
+    &ensp;→&ensp;<span style="color:#c4b5fd;font-weight:700">3. LangGraph StateGraph</span> käynnistyy
+    &ensp;→&ensp;<span style="color:#c4b5fd;font-weight:700">4. GPT-4o</span> päättää seuraavan tool-kutsun
+    &ensp;→&ensp;<span style="color:#34d399;font-weight:700">5. Tool Hub</span> hakee datan (ADS-B / sää / jne.)
+    &ensp;→&ensp;<span style="color:#c4b5fd;font-weight:700">6. GPT-4o</span> analysoi tulokset, päättää jatkoaskeleet
+    &ensp;→&ensp;<span style="color:#60a5fa;font-weight:700">7. SSE stream</span> palauttaa tokenit + tool-tapahtumat reaaliajassa
+    &ensp;→&ensp;<span style="color:#a29ae0;font-weight:700">8. Frontend</span> renderöi vastauksen streamattuna<br><br>
+    <span style="color:#fbbf24;font-weight:700">Karttavirta:</span>
+    Frontend <span style="color:#fbbf24">POST /api/tools/call/adsb_area</span>
+    → API → Tool Hub → ADS-B Exchange
+    → GeoJSON features → MapLibre GL renderöi kartalla
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: PALVELUT
+═══════════════════════════════════════════════════════ -->
+<div id="tab-services" class="tab-pane">
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🌐</span> Kaikki palvelut</div>
+  <div class="services-grid">
+
+    <a class="svc" href="https://agreeable-bay-0c9251203.7.azurestaticapps.net" target="_blank">
+      <div class="svc-head"><span class="svc-icon">⚙️</span><span class="svc-name">Agent Creator</span><span class="env-tag et-pub">SWA</span></div>
+      <span class="svc-url">agreeable-bay-0c9251203.7.azurestaticapps.net</span>
+      <div class="svc-desc">Agentin koko elinkaari: luonti, muokkaus, testaus, poisto. AI-konsultti (Superagentti) AOI-kartalla. AdminPanel käyttäjähallintaan. AgentForm kaikille kentille. DevLogin-kirjautumisruutu.</div>
+      <div class="svc-tags"><span class="stag">React 18</span><span class="stag">Vite</span><span class="stag">MSAL B2C</span><span class="stag">MapLibre AOI</span><span class="stag">SSE streaming</span></div>
+    </a>
+
+    <a class="svc" href="https://delightful-tree-02d1d8603.7.azurestaticapps.net" target="_blank">
+      <div class="svc-head"><span class="svc-icon">🏢</span><span class="svc-name">Operator Dashboard</span><span class="env-tag et-pub">SWA</span></div>
+      <span class="svc-url">delightful-tree-02d1d8603.7.azurestaticapps.net</span>
+      <div class="svc-desc">Operaattorin kojelauta. AgentStore jaettujen agenttien selaamiseen. Omat agentit + TestChat. ✨ Uusi: 🗺️ Tilannekuva-kartta live ADS-B:llä, QuickAgentModal, DevLogin.</div>
+      <div class="svc-tags"><span class="stag">React 18</span><span class="stag">MapLibre GL</span><span class="stag">ADS-B live</span><span class="stag">SSE streaming</span></div>
+    </a>
+
+    <a class="svc" href="https://green-glacier-0ec1a7c03.7.azurestaticapps.net" target="_blank">
+      <div class="svc-head"><span class="svc-icon">✈️</span><span class="svc-name">Prophet · Lentoanalyysi</span><span class="env-tag et-pub">SWA</span></div>
+      <span class="svc-url">green-glacier-0ec1a7c03.7.azurestaticapps.net</span>
+      <div class="svc-desc">Täysi lentoanalyysialusta. Dashboard, Agentit, Sessiot, ✨ Lentoanalyysi-kartta. MapLibre GL Draw, AOI-polygonipiirto, useita samanaikaisia AoiWindow-paneeleita, AI-chat per AOI, automaattihälytykset.</div>
+      <div class="svc-tags"><span class="stag">MapLibre GL</span><span class="stag">GL Draw</span><span class="stag">AoiWindow</span><span class="stag">ADS-B 5s</span><span class="stag">SSE</span></div>
+    </a>
+
+    <a class="svc" href="https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io/docs" target="_blank">
+      <div class="svc-head"><span class="svc-icon">🔌</span><span class="svc-name">Anthene API</span><span class="env-tag et-api">CONTAINER APP</span></div>
+      <span class="svc-url">anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io</span>
+      <div class="svc-desc">FastAPI-backend. JWT-autentikaatio (HS256 + B2C RS256), agenttirekisteri (Cosmos DB), LangGraph SSE-suoritus, AI-konsultti, käyttäjähallinta, tool call -proxy. Imagen: auth-v2.</div>
+      <div class="svc-tags"><span class="stag">FastAPI</span><span class="stag">LangGraph</span><span class="stag">Cosmos DB</span><span class="stag">auth-v2</span><span class="stag">21 tools proxy</span></div>
+    </a>
+
+    <div class="svc">
+      <div class="svc-head"><span class="svc-icon">🛠️</span><span class="svc-name">Tool Hub</span><span class="env-tag et-int">INTERNAL</span></div>
+      <span class="svc-url">anthene-toolhub.internal.greensea-…swedencentral.azurecontainerapps.io</span>
+      <div class="svc-desc">21 avoimen datan työkalu 10 kategoriassa. FastAPI-palvelu, kutsutaan API:n kautta sisäisesti. Ei suoraa julkista yhteyttä. Tuottaa raakadatan LangGraph-agentille ja tool call -proxylle.</div>
+      <div class="svc-tags"><span class="stag">FastAPI</span><span class="stag">21 tools</span><span class="stag">internal VNet</span></div>
+    </div>
+
+    <div class="svc">
+      <div class="svc-head"><span class="svc-icon">🗄️</span><span class="svc-name">Azure Cosmos DB</span><span class="env-tag et-int">NOSQL</span></div>
+      <span class="svc-url">anthene-agentic-cosmos.documents.azure.com</span>
+      <div class="svc-desc">Serverless NoSQL. Kontit: <b>agents</b> (kaikki agentit), <b>users</b> (profiilit + roolit), <b>agent_runs</b> (suoritushistoria), <b>invites</b> (kutsukoodit). Partition key /id tai /owner_id.</div>
+      <div class="svc-tags"><span class="stag">agents</span><span class="stag">users</span><span class="stag">agent_runs</span><span class="stag">invites</span><span class="stag">serverless</span></div>
+    </div>
+
+    <a class="svc" href="https://green-glacier-0ec1a7c03.7.azurestaticapps.net/portal.html" target="_blank">
+      <div class="svc-head"><span class="svc-icon">🌍</span><span class="svc-name">Anthene Portal</span><span class="env-tag et-pub">SWA</span></div>
+      <span class="svc-url">green-glacier-…/portal.html &nbsp;·&nbsp; salasana: Jallukola</span>
+      <div class="svc-desc">Ylätason portaali koko Anthene-tuoteperheelle. Kuvaa molemmat ympäristöt (Agentic + Light), arkkitehtuurikerrokset ja linkit kaikkiin näkymiin.</div>
+      <div class="svc-tags"><span class="stag">password: Jallukola</span></div>
+    </a>
+
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: API ENDPOINTS
+═══════════════════════════════════════════════════════ -->
+<div id="tab-api" class="tab-pane">
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🔌</span> API-endpointit</div>
+  <p class="api-note">Base URL: <code>https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io</code> &nbsp;·&nbsp; Swagger: <a href="https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io/docs" target="_blank" style="color:#7c6fcd">/docs ↗</a></p>
+  <table>
+    <thead><tr><th>Metodi</th><th>Polku</th><th>Auth</th><th>Kuvaus</th></tr></thead>
+    <tbody>
+      <!-- Auth -->
+      <tr class="new-row"><td><span class="m m-post">POST</span></td><td><span class="ep">/api/auth/login</span> <span class="new-label">NEW</span></td><td><span class="auth-t a-none">–</span></td><td class="ep-desc">Demo-kirjautuminen → HS256 JWT (8h). Body: {username, password}</td></tr>
+      <!-- Users -->
+      <tr><td><span class="m m-get">GET</span></td><td><span class="ep">/api/users/me</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Oma profiili (luodaan automaattisesti ensimmäisellä kutsulla)</td></tr>
+      <tr><td><span class="m m-patch">PATCH</span></td><td><span class="ep">/api/users/me</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Päivitä näyttönimi tai asetukset</td></tr>
+      <tr><td><span class="m m-get">GET</span></td><td><span class="ep">/api/users</span></td><td><span class="auth-t a-admin">Admin</span></td><td class="ep-desc">Kaikki käyttäjät (vain admin)</td></tr>
+      <tr><td><span class="m m-patch">PATCH</span></td><td><span class="ep">/api/users/{id}/role</span></td><td><span class="auth-t a-admin">Admin</span></td><td class="ep-desc">Vaihda käyttäjän rooli</td></tr>
+      <tr><td><span class="m m-del">DELETE</span></td><td><span class="ep">/api/users/{id}</span></td><td><span class="auth-t a-admin">Admin</span></td><td class="ep-desc">Poista käyttäjä</td></tr>
+      <!-- Agents -->
+      <tr><td><span class="m m-get">GET</span></td><td><span class="ep">/api/agents</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Omat agentit (visibility: private | shared)</td></tr>
+      <tr><td><span class="m m-post">POST</span></td><td><span class="ep">/api/agents</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Luo uusi agentti → 201 + agent JSON</td></tr>
+      <tr><td><span class="m m-get">GET</span></td><td><span class="ep">/api/agents/store</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Julkiset agentit AgentStoreen</td></tr>
+      <tr><td><span class="m m-get">GET</span></td><td><span class="ep">/api/agents/{id}</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Hae yksittäinen agentti</td></tr>
+      <tr><td><span class="m m-patch">PATCH</span></td><td><span class="ep">/api/agents/{id}</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Päivitä agentin kenttiä (partial update)</td></tr>
+      <tr><td><span class="m m-del">DELETE</span></td><td><span class="ep">/api/agents/{id}</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Poista agentti → 204</td></tr>
+      <tr><td><span class="m m-post">POST</span></td><td><span class="ep">/api/agents/{id}/copy</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Kopioi Store-agentti omaksi (clone)</td></tr>
+      <!-- Runtime -->
+      <tr><td><span class="m m-post">POST</span></td><td><span class="ep">/api/run/{agent_id}</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Suorita agentti — SSE stream: token | tool_start | tool_end | done | error</td></tr>
+      <!-- Consult -->
+      <tr><td><span class="m m-post">POST</span></td><td><span class="ep">/api/consult</span></td><td><span class="auth-t a-none">–</span></td><td class="ep-desc">AI-sparraaja agenttikonsultille. Body: {messages[], aoi?} → SSE stream</td></tr>
+      <!-- Tools -->
+      <tr><td><span class="m m-get">GET</span></td><td><span class="ep">/api/tools</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Kaikki 21 työkalua kategorioineen (Tool Hub -proxy)</td></tr>
+      <tr class="new-row"><td><span class="m m-post">POST</span></td><td><span class="ep">/api/tools/call/{tool_id}</span> <span class="new-label">NEW</span></td><td><span class="auth-t a-bearer">Bearer</span></td><td class="ep-desc">Kutsu yhtä työkalua suoraan. Body: parametrit JSON. Timeout 30s. Käytetään karttanäkymissä ADS-B-dataan.</td></tr>
+    </tbody>
+  </table>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: TOOLS
+═══════════════════════════════════════════════════════ -->
+<div id="tab-tools" class="tab-pane">
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🛠️</span> Työkalukataloogi — 21 työkalua</div>
+  <div class="tool-cats">
+
+    <div class="cat-block">
+      <div class="cat-hdr"><span class="cat-ic">✈️</span><span class="cat-nm">Ilmaliikenne (ADS-B)</span><span class="cat-cnt">4 työkalua</span></div>
+      <div class="tools-grid">
+        <div class="tool"><div class="tool-id">adsb_area</div><div class="tool-nm">ADS-B aluehaku</div><div class="tool-dc">Lentokoneet annetulla lat/lon/radius-alueella. Palauttaa callsign, tyyppi, korkeus, nopeus, sotilas-lippu.</div></div>
+        <div class="tool"><div class="tool-id">adsb_flight</div><div class="tool-nm">Lennon tiedot</div><div class="tool-dc">Yksittäisen lennon tiedot ICAO hex-koodilla tai lentonumerolla.</div></div>
+        <div class="tool"><div class="tool-id">adsb_trail</div><div class="tool-nm">Lentorata</div><div class="tool-dc">Lennon historiallinen reitti pistejonona. Visualisoidaan kartalle.</div></div>
+        <div class="tool"><div class="tool-id">adsb_military</div><div class="tool-nm">Sotilaslentokoneet</div><div class="tool-dc">Sotilasluokiteltujen lentokoneiden haku alueelta.</div></div>
+      </div>
+    </div>
+
+    <div class="cat-block">
+      <div class="cat-hdr"><span class="cat-ic">🌊</span><span class="cat-nm">Meriliikenne (AIS)</span><span class="cat-cnt">3 työkalua</span></div>
+      <div class="tools-grid">
+        <div class="tool"><div class="tool-id">ais_area</div><div class="tool-nm">AIS aluehaku</div><div class="tool-dc">Alukset annetulla merialueella: MMSI, nimi, tyyppi, nopeus, kurssi.</div></div>
+        <div class="tool"><div class="tool-id">ais_vessel</div><div class="tool-nm">Aluksen tiedot</div><div class="tool-dc">Yksittäisen aluksen tiedot MMSI-numerolla.</div></div>
+        <div class="tool"><div class="tool-id">ais_trail</div><div class="tool-nm">Aluksen reitti</div><div class="tool-dc">Aluksen historiallinen reitti ja satamakäynnit.</div></div>
+      </div>
+    </div>
+
+    <div class="cat-block">
+      <div class="cat-hdr"><span class="cat-ic">🌦️</span><span class="cat-nm">Sää (FMI)</span><span class="cat-cnt">3 työkalua</span></div>
+      <div class="tools-grid">
+        <div class="tool"><div class="tool-id">fmi_observations</div><div class="tool-nm">Säähavainnot</div><div class="tool-dc">FMI:n lähimmän aseman reaaliaikaiset havainnot: lämpötila, tuuli, näkyvyys.</div></div>
+        <div class="tool"><div class="tool-id">fmi_forecast</div><div class="tool-nm">Sääennuste</div><div class="tool-dc">24h ennuste annettuun sijaintiin.</div></div>
+        <div class="tool"><div class="tool-id">fmi_warnings</div><div class="tool-nm">Säävaroitukset</div><div class="tool-dc">Aktiiviset säävaroitukset Suomessa.</div></div>
+      </div>
+    </div>
+
+    <div class="cat-block">
+      <div class="cat-hdr"><span class="cat-ic">🔥</span><span class="cat-nm">Tulipalot (EFFIS + NASA)</span><span class="cat-cnt">4 työkalua</span></div>
+      <div class="tools-grid">
+        <div class="tool"><div class="tool-id">effis_fires</div><div class="tool-nm">EFFIS aktiiviset palot</div><div class="tool-dc">EU:n metsäpalopalvelun aktiiviset palot alueella.</div></div>
+        <div class="tool"><div class="tool-id">effis_risk</div><div class="tool-nm">Paloriski</div><div class="tool-dc">Metsäpaloriskin indeksi annetulla alueella.</div></div>
+        <div class="tool"><div class="tool-id">nasa_firms_viirs</div><div class="tool-nm">NASA FIRMS VIIRS</div><div class="tool-dc">VIIRS-satelliittihavainnut kuumapisteet.</div></div>
+        <div class="tool"><div class="tool-id">nasa_firms_modis</div><div class="tool-nm">NASA FIRMS MODIS</div><div class="tool-dc">MODIS-satelliittihavainnut kuumapisteet.</div></div>
+      </div>
+    </div>
+
+    <div class="cat-block">
+      <div class="cat-hdr"><span class="cat-ic">📻</span><span class="cat-nm">Muut työkalut</span><span class="cat-cnt">7 työkalua</span></div>
+      <div class="tools-grid">
+        <div class="tool"><div class="tool-id">stuk_radiation</div><div class="tool-nm">STUK Säteily</div><div class="tool-dc">Säteilymittariverkosto — reaaliaikaiset annosnopeudet Suomessa.</div></div>
+        <div class="tool"><div class="tool-id">stuk_stations</div><div class="tool-nm">STUK Asemat</div><div class="tool-dc">Kaikkien säteilymittausasemien lista ja sijainnit.</div></div>
+        <div class="tool"><div class="tool-id">telegram_notify</div><div class="tool-nm">Telegram-ilmoitus</div><div class="tool-dc">Lähetä viesti tai hälytys Telegram-kanavaan.</div></div>
+        <div class="tool"><div class="tool-id">map_geocode</div><div class="tool-nm">Geokoodaus</div><div class="tool-dc">Paikannimi → koordinaatit (Nominatim/OSM).</div></div>
+        <div class="tool"><div class="tool-id">web_search</div><div class="tool-nm">Web-haku</div><div class="tool-dc">Reaaliaikainen verkkohaku agenttien käyttöön.</div></div>
+        <div class="tool"><div class="tool-id">calculator</div><div class="tool-nm">Laskin</div><div class="tool-dc">Matemaattiset laskutoimitukset ja yksikkömuunnokset.</div></div>
+        <div class="tool"><div class="tool-id">file_read</div><div class="tool-nm">Tiedostoluku</div><div class="tool-dc">Lue tiedostoja agentin käyttöön (PDF, CSV, TXT).</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: PÄÄSYNHALLINTA
+═══════════════════════════════════════════════════════ -->
+<div id="tab-auth" class="tab-pane">
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🔐</span> Pääsynhallinta</div>
+
+  <div style="background:#0a1525;border:1px solid #1e3a5f;border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:1.5rem;font-size:.82rem;color:#4a6080;line-height:1.7">
+    <b style="color:#a29ae0">Demo-autentikaatio (DEV_MODE)</b> — Kun Azure AD B2C ei ole konfiguroitu, käytetään paikallista JWT-kirjautumista.<br>
+    Frontend näyttää <b style="color:#fbbf24">DevLogin</b>-lomakkeen → <code style="color:#60a5fa">POST /api/auth/login</code> → palautetaan <b>HS256 JWT (8h)</b> → tallennetaan <code>localStorage</code>:een → lähetetään <code>Authorization: Bearer</code> -headerissa.<br>
+    API validoi ensin HS256-tokenit (issuer: <code>anthene-local</code>), sitten B2C RS256 -tokenit. JWT_SECRET = env var <code>JWT_SECRET</code> (oletus: <code>anthene-demo-secret-2025</code>).
+  </div>
+
+  <div class="auth-grid">
+    <div class="auth-card">
+      <div class="auth-card-head">
+        <span class="auth-role role-admin">Admin</span>
+        <span class="auth-user">admin</span>
+      </div>
+      <span class="auth-pw">Jallukola</span>
+      <div class="auth-perms">
+        <div class="perm">Luo / muokkaa / poista agentteja</div>
+        <div class="perm">Hallinnoi käyttäjiä</div>
+        <div class="perm">Muuta rooleja</div>
+        <div class="perm">Kaikki API-endpointit</div>
+        <div class="perm">Julkaise agentteja Storeen</div>
+      </div>
+    </div>
+    <div class="auth-card">
+      <div class="auth-card-head">
+        <span class="auth-role role-editor">Operaattori</span>
+        <span class="auth-user">operaattori</span>
+      </div>
+      <span class="auth-pw">Anthene2025</span>
+      <div class="auth-perms">
+        <div class="perm">Luo / muokkaa omia agentteja</div>
+        <div class="perm">Suorita agentteja</div>
+        <div class="perm">Käytä karttanäkymiä</div>
+        <div class="perm">Lentoanalyysi + AOI</div>
+        <div class="perm no">Ei käyttäjähallintaa</div>
+      </div>
+    </div>
+    <div class="auth-card">
+      <div class="auth-card-head">
+        <span class="auth-role role-viewer">Katsoja</span>
+        <span class="auth-user">demo</span>
+      </div>
+      <span class="auth-pw">demo</span>
+      <div class="auth-perms">
+        <div class="perm">Selaa Store-agentteja</div>
+        <div class="perm">Katso karttanäkymiä</div>
+        <div class="perm no">Ei agentin luontia</div>
+        <div class="perm no">Ei suoritusta</div>
+        <div class="perm no">Ei käyttäjähallintaa</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:1.5rem">
+    <div class="sec-title"><span class="sec-title-icon">🔮</span> Tuleva: Azure AD B2C</div>
+    <div style="background:#0a1525;border:1px solid #1e3a5f;border-radius:12px;padding:1.1rem 1.3rem;font-size:.8rem;color:#3a5070;line-height:1.6">
+      Kun <code>B2C_TENANT_NAME</code>, <code>B2C_POLICY</code> ja <code>B2C_CLIENT_ID</code> asetetaan Container App -ympäristömuuttujiksi,<br>
+      API siirtyy automaattisesti B2C RS256 -validointiin. Frontend-sovelluksissa MSAL-kirjautuminen aktivoituu<br>
+      kun <code>VITE_B2C_CLIENT_ID</code> on asetettu SWA-ympäristömuuttujiin. Roolit tulevat <code>extension_Role</code>-claimista.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: AZURE-INFRA
+═══════════════════════════════════════════════════════ -->
+<div id="tab-infra" class="tab-pane">
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">☁️</span> Azure-infrastruktuuri</div>
+  <div style="color:#3a5070;font-size:.8rem;margin-bottom:1.25rem">Resurssiryhmä: <b style="color:#7c6fcd">anthene-agentic-rg</b> &nbsp;·&nbsp; Alue: <b style="color:#7c6fcd">Sweden Central</b> &nbsp;·&nbsp; Tilaus: Tietoevry</div>
+  <div class="infra-grid">
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">🐳</span><span class="infra-name">Azure Container Apps</span><span class="infra-tier">Env: greensea</span></div>
+      <div class="infra-detail">
+        <b>anthene-api</b> — FastAPI backend, image: auth-v2<br>
+        <b>anthene-toolhub</b> — Tool Hub, 21 työkalua, internal ingress<br>
+        Container Apps -ympäristö: <b>greensea-93121b9f</b><br>
+        VNet: toolhub näkyy vain API:lle sisäisesti
+      </div>
+    </div>
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">📦</span><span class="infra-name">Azure Container Registry</span><span class="infra-tier">antheneagentic</span></div>
+      <div class="infra-detail">
+        Registry: <b>antheneagentic.azurecr.io</b><br>
+        Imaget: anthene-api:latest, :auth-v2, :flight-int<br>
+        anthene-toolhub:latest<br>
+        Rakennetaan: <code>az acr build</code>
+      </div>
+    </div>
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">🌐</span><span class="infra-name">Static Web Apps (×3)</span><span class="infra-tier">Free tier</span></div>
+      <div class="infra-detail">
+        <b>anthene-agentic-creator</b> → agreeable-bay<br>
+        <b>anthene-agentic-store</b> → delightful-tree<br>
+        <b>anthene-agentic-prophet</b> → green-glacier<br>
+        Alue: East US 2 (SWA-oletus)
+      </div>
+    </div>
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">🗄️</span><span class="infra-name">Azure Cosmos DB</span><span class="infra-tier">Serverless</span></div>
+      <div class="infra-detail">
+        Account: <b>anthene-agentic-cosmos</b><br>
+        API: NoSQL (Core SQL)<br>
+        Tietokanta: anthene<br>
+        Kontit: agents, users, agent_runs, invites<br>
+        Partition key: /id tai /owner_id
+      </div>
+    </div>
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">🤖</span><span class="infra-name">Azure OpenAI / AI Foundry</span><span class="infra-tier">GPT-4o</span></div>
+      <div class="infra-detail">
+        Model: <b>gpt-4o</b><br>
+        Endpoint: AI Foundry<br>
+        Käyttö: LangGraph runtime + AI-konsultti<br>
+        Konfiguroitu: AZURE_OPENAI_* ympäristömuuttujat
+      </div>
+    </div>
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">🔑</span><span class="infra-name">Azure AD B2C</span><span class="infra-tier">Tulossa</span></div>
+      <div class="infra-detail">
+        Tenant: <b>antheneagentic.onmicrosoft.com</b><br>
+        Policy: B2C_1_signup_signin<br>
+        Status: <span style="color:#f59e0b">⏳ Konfiguroimatta</span> — DEV_MODE aktiivinen<br>
+        Korvaa: paikallinen HS256 JWT -auth
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+</div><!-- /page -->
+
+<footer>
+  <strong>Anthene Agentic</strong> · Tietoevry / Vivicta · ssivonen 2026 ·
+  <a href="https://green-glacier-0ec1a7c03.7.azurestaticapps.net/portal.html" style="color:#3a5070">Portal ↗</a>
+</footer>
+
+</div><!-- /portal -->
+
+<script>
+const HASH = '401315c8810bda5938114bf5bf9e41250dd73e27e4db4d7337f4e4aae2004db1'
+async function sha256(s){const b=new TextEncoder().encode(s);const h=await crypto.subtle.digest('SHA-256',b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function checkPw(){
+  const v=document.getElementById('pw').value
+  const h=await sha256(v)
+  if(h===HASH){document.getElementById('lock').style.display='none';document.getElementById('portal').style.display='block'}
+  else{document.getElementById('lock-err').style.display='block';document.getElementById('pw').value='';document.getElementById('pw').focus()}
+}
+document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')checkPw()})
+
+function showTab(id){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'))
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'))
+  document.getElementById('tab-'+id).classList.add('active')
+  event.target.classList.add('active')
+}
+</script>
+</body>
+</html>
