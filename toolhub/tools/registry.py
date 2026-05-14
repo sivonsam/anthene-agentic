@@ -20,7 +20,7 @@ Removed tools that were non-functional:
   - Vessel detail — Digitraffic /locations/{mmsi} returns 404
 """
 
-from tools.adsb import adsb_area
+from tools.adsb import adsb_area, adsb_military, adsb_emergency, adsb_by_registration, adsb_by_callsign, adsb_by_squawk, aircraft_detail
 from tools.opensky import opensky_area
 from tools.fmi import fmi_weather_observations as fmi_observations, fmi_lightning
 from tools.weather import weather_area
@@ -37,8 +37,8 @@ TOOL_REGISTRY: dict[str, dict] = {
         "name": "ADS-B Area Query",
         "description": (
             "Live aircraft within radius from a location. Returns callsign, type, altitude, "
-            "speed, heading, squawk alerts. Data from Anthene Light cache (OpenSky + ADS-B Exchange, "
-            "updates every 30s). Fallback: airplanes.live."
+            "speed, heading, squawk alerts. Primary: ADS-B Exchange direct API (European coverage). "
+            "Fallback: Anthene Light Cosmos cache, then airplanes.live."
         ),
         "parameters": {
             "lat": {"type": "number", "description": "Center latitude"},
@@ -47,10 +47,108 @@ TOOL_REGISTRY: dict[str, dict] = {
         },
         "avoindata_category": "liikenne",
         "avoindata_category_label": "Liikenne",
-        "source_org": "OpenSky Network / ADS-B Exchange (via Anthene cache)",
-        "license": "CC BY (OpenSky); open (airplanes.live)",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/group/liikenne",
+        "source_org": "ADS-B Exchange (direct enterprise API)",
+        "license": "Commercial trial — European coverage",
+        "open_data": False,
+        "avoindata_url": "https://www.adsbexchange.com/",
+    },
+    "adsb_military": {
+        "fn": adsb_military,
+        "name": "Sotilasilmailu (globaali)",
+        "description": (
+            "Kaikki tällä hetkellä seuratut sotilaskoneet. "
+            "Palauttaa sijainnin, tyypin, nopeuden, korkeuden. Globaali kattavuus."
+        ),
+        "parameters": {},
+        "avoindata_category": "oikeus-oikeysjarjestelma-ja-yleinen-turvallisuus",
+        "avoindata_category_label": "Turvallisuus",
+        "source_org": "ADS-B Exchange",
+        "license": "Commercial trial",
+        "open_data": False,
+        "avoindata_url": None,
+    },
+    "adsb_emergency": {
+        "fn": adsb_emergency,
+        "name": "Hätäsquawk-lennot",
+        "description": (
+            "Kaikki koneet joilla on hätäsquawk 7700 (hätätilanne), "
+            "7600 (radioyhteys katki), 7500 (kaappaus). Reaaliaikainen."
+        ),
+        "parameters": {},
+        "avoindata_category": "oikeus-oikeysjarjestelma-ja-yleinen-turvallisuus",
+        "avoindata_category_label": "Turvallisuus",
+        "source_org": "ADS-B Exchange",
+        "license": "Commercial trial",
+        "open_data": False,
+        "avoindata_url": None,
+    },
+    "adsb_by_registration": {
+        "fn": adsb_by_registration,
+        "name": "Hae kone rekisteritunnuksella",
+        "description": (
+            "Etsi lentokone rekisteritunnuksella (esim. OH-LVL, N12345). "
+            "Palauttaa nykyisen sijainnin ja lentotiedot."
+        ),
+        "parameters": {
+            "registration": {"type": "string", "description": "Aircraft registration/tail number (e.g. OH-LVL)"},
+        },
+        "avoindata_category": "liikenne",
+        "avoindata_category_label": "Liikenne",
+        "source_org": "ADS-B Exchange",
+        "license": "Commercial trial",
+        "open_data": False,
+        "avoindata_url": None,
+    },
+    "adsb_by_callsign": {
+        "fn": adsb_by_callsign,
+        "name": "Hae kone callsignilla",
+        "description": (
+            "Etsi lentokone kutsumerkillä/lennon numerolla (esim. FIN123, BAW456). "
+            "Palauttaa nykyisen sijainnin."
+        ),
+        "parameters": {
+            "callsign": {"type": "string", "description": "Flight callsign (e.g. FIN123)"},
+        },
+        "avoindata_category": "liikenne",
+        "avoindata_category_label": "Liikenne",
+        "source_org": "ADS-B Exchange",
+        "license": "Commercial trial",
+        "open_data": False,
+        "avoindata_url": None,
+    },
+    "adsb_by_squawk": {
+        "fn": adsb_by_squawk,
+        "name": "Hae squawk-koodilla",
+        "description": (
+            "Kaikki koneet joilla on tietty squawk-koodi. "
+            "Erikoiset: 7700=hätä, 7600=radio katki, 7500=kaappaus."
+        ),
+        "parameters": {
+            "squawk": {"type": "string", "description": "4-digit squawk code (e.g. 7700)"},
+        },
+        "avoindata_category": "oikeus-oikeysjarjestelma-ja-yleinen-turvallisuus",
+        "avoindata_category_label": "Turvallisuus",
+        "source_org": "ADS-B Exchange",
+        "license": "Commercial trial",
+        "open_data": False,
+        "avoindata_url": None,
+    },
+    "aircraft_detail": {
+        "fn": aircraft_detail,
+        "name": "Lentokoneen tiedot (ICAO hex)",
+        "description": (
+            "Nykyinen sijainti ja täydet tiedot yksittäiselle koneelle ICAO24 hex-koodilla. "
+            "Sisältää operaattorin, tyypin, navigointitilan, signaalin laadun."
+        ),
+        "parameters": {
+            "hex_code": {"type": "string", "description": "ICAO24 hex address (e.g. 4b1806)"},
+        },
+        "avoindata_category": "liikenne",
+        "avoindata_category_label": "Liikenne",
+        "source_org": "ADS-B Exchange",
+        "license": "Commercial trial",
+        "open_data": False,
+        "avoindata_url": None,
     },
     "opensky_area": {
         "fn": opensky_area,

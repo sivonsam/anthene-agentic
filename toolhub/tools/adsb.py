@@ -1,4 +1,13 @@
-"""ADS-B Exchange tools — enterprise v2 API + Cosmos cache + OpenSky fallback."""
+"""ADS-B Exchange tools — direct enterprise v2 API + Cosmos cache + airplanes.live fallback.
+
+Direct API base: https://adsbexchange.com/api/aircraft/v2/
+Auth header: api-auth: <key>
+Endpoint corrections vs RapidAPI version:
+  reg/{r}/      → registration/{r}/
+  hex/{h}/      → icao/{h}/
+  type/{t}/     → NOT available in European Coverage trial
+  trail/{h}/    → NOT available in European Coverage trial
+"""
 
 from __future__ import annotations
 
@@ -9,11 +18,8 @@ import httpx
 from tools.cosmos_cache import get_flights_in_area as _cosmos_flights
 
 ADSB_API_KEY = os.getenv("ADSB_API_KEY", "")
-ADSB_BASE = "https://adsbexchange-com1.p.rapidapi.com/v2"
-ADSB_HEADERS = {
-    "x-rapidapi-host": "adsbexchange-com1.p.rapidapi.com",
-    "x-rapidapi-key": ADSB_API_KEY,
-}
+# Direct API — European Coverage trial (May 11 – June 8 2026)
+ADSB_BASE = "https://adsbexchange.com/api/aircraft/v2"
 
 _CATEGORY_MAP = {
     "A1": "light", "A2": "small", "A3": "large", "A4": "high_vortex",
@@ -36,12 +42,9 @@ _SQUAWK_SPECIAL = {
 
 
 def _get_headers() -> dict:
-    """Always read key at call time (env may be set after module load)."""
+    """Direct ADS-B Exchange API uses api-auth header."""
     key = os.getenv("ADSB_API_KEY", ADSB_API_KEY)
-    return {
-        "x-rapidapi-host": "adsbexchange-com1.p.rapidapi.com",
-        "x-rapidapi-key": key,
-    }
+    return {"api-auth": key, "Accept": "application/json"}
 
 
 def _classify_adsb(ac: dict) -> dict:
@@ -208,12 +211,7 @@ async def adsb_area(lat: float, lon: float, dist_nm: float = 50.0) -> dict:
     drone, emergency, squawk alerts, operator, aircraft type description."""
     dist_nm = min(dist_nm, 250)
 
-    # Primary source: Anthene Light Cosmos DB cache (works from Azure Container Apps)
-    cosmos_result = await _cosmos_flights(lat, lon, dist_nm)
-    if not cosmos_result.get("error") and cosmos_result.get("total", 0) >= 0:
-        return cosmos_result
-
-    # Fallback 1: ADS-B Exchange direct API (may work if key is subscribed)
+    # Primary: ADS-B Exchange direct API (enterprise trial, European coverage)
     if os.getenv("ADSB_API_KEY", ADSB_API_KEY):
         url = f"{ADSB_BASE}/lat/{lat}/lon/{lon}/dist/{int(dist_nm)}/"
         try:
@@ -221,29 +219,33 @@ async def adsb_area(lat: float, lon: float, dist_nm: float = 50.0) -> dict:
                 resp = await client.get(url, headers=_get_headers())
                 if resp.status_code == 200:
                     data = resp.json()
-                    aircraft = [_classify_adsb(ac) for ac in data.get("ac", [])]
-                    military = [a for a in aircraft if a["military"]]
-                    drones = [a for a in aircraft if a["category"] == "B4"]
-                    emergencies = [a for a in aircraft if a.get("emergency")]
-                    squawk_alerts = [a for a in aircraft if a.get("squawk_alert")]
-                    return {
-                        "total": len(aircraft),
-                        "military_count": len(military),
-                        "drone_count": len(drones),
-                        "emergency_count": len(emergencies),
-                        "squawk_alert_count": len(squawk_alerts),
-                        "aircraft": aircraft[:150],
-                        "query": {"lat": lat, "lon": lon, "dist_nm": dist_nm},
-                        "source": "ADS-B Exchange",
-                    }
+                    ac_list = data.get("ac") or []
+                    if ac_list is not None:  # empty list is OK — no aircraft in range
+                        aircraft = [_classify_adsb(ac) for ac in ac_list]
+                        military = [a for a in aircraft if a["military"]]
+                        drones = [a for a in aircraft if a["category"] == "B4"]
+                        emergencies = [a for a in aircraft if a.get("emergency")]
+                        squawk_alerts = [a for a in aircraft if a.get("squawk_alert")]
+                        return {
+                            "total": len(aircraft),
+                            "military_count": len(military),
+                            "drone_count": len(drones),
+                            "emergency_count": len(emergencies),
+                            "squawk_alert_count": len(squawk_alerts),
+                            "aircraft": aircraft[:150],
+                            "query": {"lat": lat, "lon": lon, "dist_nm": dist_nm},
+                            "source": "ADS-B Exchange (direct API)",
+                        }
         except Exception:
             pass
 
-    # Fallback 2: OpenSky direct (may be blocked from Azure)
-    result = await _adsb_area_opensky(lat, lon, dist_nm)
-    if cosmos_result.get("error"):
-        result["cosmos_error"] = cosmos_result["error"]
-    return result
+    # Fallback 1: Anthene Light Cosmos DB cache
+    cosmos_result = await _cosmos_flights(lat, lon, dist_nm)
+    if not cosmos_result.get("error"):
+        return cosmos_result
+
+    # Fallback 2: airplanes.live / OpenSky
+    return await _adsb_area_opensky(lat, lon, dist_nm)
 
 
 async def adsb_military() -> dict:
@@ -253,10 +255,11 @@ async def adsb_military() -> dict:
         return err
     async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.get(f"{ADSB_BASE}/mil/", headers=_get_headers())
-        if resp.status_code == 403:
-            return {"error": f"API-avain ei tue tätä endpointia (403 Forbidden: {resp.url}). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if resp.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429). Odota hetki.", "aircraft": [], "total": 0}
+        if resp.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {resp.status_code}: {resp.text[:100]}", "aircraft": [], "total": 0}
+        if resp.json().get("message") and not resp.json().get("ac") and not resp.json().get("trail"):
+            msg = resp.json()["message"]
+            return {"error": f"ADS-B Exchange: {msg}", "aircraft": [], "total": 0}
         resp.raise_for_status()
         data = resp.json()
     aircraft = [_classify_adsb(ac) for ac in data.get("ac", [])]
@@ -278,10 +281,8 @@ async def adsb_emergency() -> dict:
         r2 = await client.get(f"{ADSB_BASE}/sqk/7600/", headers=_get_headers())
         r3 = await client.get(f"{ADSB_BASE}/sqk/7500/", headers=_get_headers())
     for r in [resp, r2, r3]:
-        if r.status_code == 403:
-            return {"error": "API-avain ei tue squawk-hakua (403 Forbidden). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if r.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429).", "aircraft": [], "total": 0}
+        if r.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {r.status_code}: {r.text[:100]}", "aircraft": [], "total": 0}
     all_ac = (
         resp.json().get("ac", []) +
         r2.json().get("ac", []) +
@@ -310,11 +311,12 @@ async def adsb_by_registration(registration: str) -> dict:
         return err
     reg = registration.upper().replace("-", "").replace(" ", "")
     async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(f"{ADSB_BASE}/reg/{reg}/", headers=_get_headers())
-        if resp.status_code == 403:
-            return {"error": f"API-avain ei tue tätä endpointia (403 Forbidden: {resp.url}). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if resp.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429). Odota hetki.", "aircraft": [], "total": 0}
+        resp = await client.get(f"{ADSB_BASE}/registration/{reg}/", headers=_get_headers())
+        if resp.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {resp.status_code}: {resp.text[:100]}", "aircraft": [], "total": 0}
+        if resp.json().get("message") and not resp.json().get("ac") and not resp.json().get("trail"):
+            msg = resp.json()["message"]
+            return {"error": f"ADS-B Exchange: {msg}", "aircraft": [], "total": 0}
         resp.raise_for_status()
         data = resp.json()
     aircraft_list = data.get("ac", [])
@@ -336,10 +338,11 @@ async def adsb_by_callsign(callsign: str) -> dict:
     cs = callsign.upper().strip()
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(f"{ADSB_BASE}/callsign/{cs}/", headers=_get_headers())
-        if resp.status_code == 403:
-            return {"error": f"API-avain ei tue tätä endpointia (403 Forbidden: {resp.url}). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if resp.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429). Odota hetki.", "aircraft": [], "total": 0}
+        if resp.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {resp.status_code}: {resp.text[:100]}", "aircraft": [], "total": 0}
+        if resp.json().get("message") and not resp.json().get("ac") and not resp.json().get("trail"):
+            msg = resp.json()["message"]
+            return {"error": f"ADS-B Exchange: {msg}", "aircraft": [], "total": 0}
         resp.raise_for_status()
         data = resp.json()
     aircraft_list = data.get("ac", [])
@@ -360,10 +363,11 @@ async def adsb_by_squawk(squawk: str) -> dict:
         return err
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(f"{ADSB_BASE}/sqk/{squawk}/", headers=_get_headers())
-        if resp.status_code == 403:
-            return {"error": f"API-avain ei tue tätä endpointia (403 Forbidden: {resp.url}). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if resp.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429). Odota hetki.", "aircraft": [], "total": 0}
+        if resp.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {resp.status_code}: {resp.text[:100]}", "aircraft": [], "total": 0}
+        if resp.json().get("message") and not resp.json().get("ac") and not resp.json().get("trail"):
+            msg = resp.json()["message"]
+            return {"error": f"ADS-B Exchange: {msg}", "aircraft": [], "total": 0}
         resp.raise_for_status()
         data = resp.json()
     aircraft_list = data.get("ac", [])
@@ -386,10 +390,11 @@ async def adsb_by_type(icao_type: str) -> dict:
     t = icao_type.upper().strip()
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(f"{ADSB_BASE}/type/{t}/", headers=_get_headers())
-        if resp.status_code == 403:
-            return {"error": f"API-avain ei tue tätä endpointia (403 Forbidden: {resp.url}). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if resp.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429). Odota hetki.", "aircraft": [], "total": 0}
+        if resp.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {resp.status_code}: {resp.text[:100]}", "aircraft": [], "total": 0}
+        if resp.json().get("message") and not resp.json().get("ac") and not resp.json().get("trail"):
+            msg = resp.json()["message"]
+            return {"error": f"ADS-B Exchange: {msg}", "aircraft": [], "total": 0}
         resp.raise_for_status()
         data = resp.json()
     aircraft_list = data.get("ac", [])
@@ -410,10 +415,11 @@ async def aircraft_trail(hex_code: str) -> dict:
     url = f"{ADSB_BASE}/trail/{hex_code}/"
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(url, headers=_get_headers())
-        if resp.status_code == 403:
-            return {"error": f"API-avain ei tue tätä endpointia (403 Forbidden: {resp.url}). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if resp.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429). Odota hetki.", "aircraft": [], "total": 0}
+        if resp.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {resp.status_code}: {resp.text[:100]}", "aircraft": [], "total": 0}
+        if resp.json().get("message") and not resp.json().get("ac") and not resp.json().get("trail"):
+            msg = resp.json()["message"]
+            return {"error": f"ADS-B Exchange: {msg}", "aircraft": [], "total": 0}
         resp.raise_for_status()
         data = resp.json()
     trail = []
@@ -445,13 +451,14 @@ async def aircraft_detail(hex_code: str) -> dict:
     err = _require_key()
     if err:
         return {**err, "hex": hex_code}
-    url = f"{ADSB_BASE}/hex/{hex_code}/"
+    url = f"{ADSB_BASE}/icao/{hex_code}/"
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(url, headers=_get_headers())
-        if resp.status_code == 403:
-            return {"error": f"API-avain ei tue tätä endpointia (403 Forbidden: {resp.url}). Tarkista RapidAPI-suunnitelma.", "aircraft": [], "total": 0}
-        if resp.status_code == 429:
-            return {"error": "API-kutsujen raja ylitetty (429). Odota hetki.", "aircraft": [], "total": 0}
+        if resp.status_code != 200:
+            return {"error": f"ADS-B Exchange virhe {resp.status_code}: {resp.text[:100]}", "aircraft": [], "total": 0}
+        if resp.json().get("message") and not resp.json().get("ac") and not resp.json().get("trail"):
+            msg = resp.json()["message"]
+            return {"error": f"ADS-B Exchange: {msg}", "aircraft": [], "total": 0}
         resp.raise_for_status()
         data = resp.json()
     aircraft_list = data.get("ac", [])
