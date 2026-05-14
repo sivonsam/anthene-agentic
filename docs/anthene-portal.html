@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anthene — Tuoteperhe</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f0;min-height:100vh;overflow-x:hidden}
+
+/* ── Lock ── */
+#lock{position:fixed;inset:0;background:#07090f;z-index:9999;display:flex;align-items:center;justify-content:center}
+.lock-card{background:#0f1523;border:1px solid #1e293b;border-radius:20px;padding:48px 56px;text-align:center;max-width:380px;width:90%;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.lock-hex{font-size:3rem;margin-bottom:1rem}
+.lock-card h1{font-size:1.3rem;font-weight:800;letter-spacing:.06em;margin-bottom:.3rem}
+.lock-card h1 span{color:#7c6fcd}
+.lock-card p{color:#475569;font-size:.85rem;margin-bottom:1.8rem;line-height:1.5}
+.lock-input{width:100%;background:#07090f;border:1px solid #1e293b;border-radius:10px;color:#e2e8f0;padding:.8rem 1rem;font-size:1rem;text-align:center;letter-spacing:.25em;margin-bottom:1rem;outline:none;transition:border-color .2s}
+.lock-input:focus{border-color:#7c6fcd}
+.lock-btn{width:100%;background:linear-gradient(135deg,#7c6fcd,#5b52a6);border:none;border-radius:10px;color:#fff;font-size:1rem;font-weight:700;padding:.8rem;cursor:pointer;transition:opacity .2s}
+.lock-btn:hover{opacity:.88}
+.lock-err{color:#ef4444;font-size:.82rem;margin-top:.75rem;display:none}
+
+/* ── Portal ── */
+#portal{display:none}
+
+/* Topbar */
+.topbar{
+  background:linear-gradient(135deg,#0a0f1e,#0f1829);
+  border-bottom:1px solid #1e293b;
+  padding:1rem 2.5rem;
+  display:flex;align-items:center;gap:1.2rem;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);
+}
+.topbar-logo{font-size:1.8rem}
+.topbar-name{font-size:1.25rem;font-weight:900;letter-spacing:.04em;color:#e2e8f0}
+.topbar-name span{color:#7c6fcd}
+.topbar-sub{font-size:.7rem;color:#475569;letter-spacing:.15em;text-transform:uppercase;margin-top:1px}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:.75rem}
+.env-badge{border-radius:20px;padding:.25rem .85rem;font-size:.72rem;font-weight:700;letter-spacing:.05em}
+.badge-agentic{background:#7c6fcd22;color:#a29ae0;border:1px solid #7c6fcd44}
+.badge-light{background:#0ea5e922;color:#38bdf8;border:1px solid #0ea5e944}
+.badge-year{background:#1e293b;color:#64748b;border:1px solid #334155;border-radius:20px;padding:.25rem .85rem;font-size:.72rem}
+
+/* Page */
+.page{max-width:1440px;margin:0 auto;padding:2.5rem 2rem 4rem}
+
+/* Hero */
+.hero{
+  text-align:center;padding:3.5rem 2rem;
+  background:radial-gradient(ellipse 80% 60% at 50% 0%,#7c6fcd15 0%,transparent 70%);
+  border:1px solid #1e293b;border-radius:20px;
+  margin-bottom:3rem;
+  position:relative;overflow:hidden;
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,#7c6fcd08 0%,transparent 50%,#0ea5e908 100%);
+  pointer-events:none;
+}
+.hero-eyebrow{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:#7c6fcd;margin-bottom:1rem;display:block}
+.hero h1{font-size:2.4rem;font-weight:900;letter-spacing:.03em;margin-bottom:.75rem}
+.hero h1 em{font-style:normal;color:#7c6fcd}
+.hero p{font-size:1rem;color:#64748b;max-width:680px;margin:0 auto 2rem;line-height:1.7}
+.hero-badges{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+.hero-badge{display:flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:20px;font-size:.8rem;font-weight:600;border:1px solid}
+.hb-agentic{background:#7c6fcd15;color:#a29ae0;border-color:#7c6fcd33}
+.hb-light{background:#0ea5e915;color:#38bdf8;border-color:#0ea5e933}
+.hb-indep{background:#10b98115;color:#34d399;border-color:#10b98133}
+
+/* Section label */
+.sec-label{
+  display:flex;align-items:center;gap:.75rem;
+  font-size:.72rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase;
+  margin-bottom:1.5rem;
+}
+.sec-label::after{content:'';flex:1;height:1px}
+
+/* ══════════════════════════════════════
+   ENVIRONMENT BLOCKS
+══════════════════════════════════════ */
+.env-block{
+  border-radius:20px;border:1px solid;padding:2rem;
+  margin-bottom:2.5rem;position:relative;overflow:hidden;
+}
+.env-block::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+}
+
+/* Anthene Agentic */
+.env-agentic{border-color:#7c6fcd33;background:linear-gradient(160deg,#0f1020,#07090f)}
+.env-agentic::before{background:linear-gradient(90deg,#7c6fcd,#5b52a6,#7c6fcd)}
+.env-agentic .sec-label{color:#a29ae0}
+.env-agentic .sec-label::after{background:linear-gradient(to right,#7c6fcd33,transparent)}
+
+/* Anthene Light */
+.env-light{border-color:#0ea5e933;background:linear-gradient(160deg,#071525,#07090f)}
+.env-light::before{background:linear-gradient(90deg,#0ea5e9,#06b6d4,#0ea5e9)}
+.env-light .sec-label{color:#38bdf8}
+.env-light .sec-label::after{background:linear-gradient(to right,#0ea5e933,transparent)}
+
+/* Env header */
+.env-header{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem;
+  margin-bottom:2rem;flex-wrap:wrap;
+}
+.env-title-block{}
+.env-env-tag{
+  display:inline-flex;align-items:center;gap:.4rem;
+  font-size:.65rem;font-weight:800;letter-spacing:.15em;text-transform:uppercase;
+  padding:.3rem .8rem;border-radius:20px;border:1px solid;margin-bottom:.6rem;
+}
+.etag-agentic{background:#7c6fcd22;color:#a29ae0;border-color:#7c6fcd44}
+.etag-light{background:#0ea5e922;color:#38bdf8;border-color:#0ea5e944}
+.env-title{font-size:1.6rem;font-weight:800;margin-bottom:.4rem}
+.env-agentic .env-title em{font-style:normal;color:#7c6fcd}
+.env-light .env-title em{font-style:normal;color:#38bdf8}
+.env-desc{font-size:.88rem;color:#64748b;line-height:1.6;max-width:620px}
+.env-infra{
+  display:flex;flex-direction:column;gap:.5rem;align-items:flex-end;flex-shrink:0;
+}
+.infra-pill{
+  font-size:.72rem;padding:.3rem .85rem;border-radius:8px;border:1px solid;
+  display:flex;align-items:center;gap:.4rem;white-space:nowrap;
+}
+.ip-agentic{background:#7c6fcd11;color:#a29ae0;border-color:#7c6fcd33}
+.ip-light{background:#0ea5e911;color:#38bdf8;border-color:#0ea5e933}
+.ip-neutral{background:#1e293b;color:#64748b;border-color:#334155}
+
+/* Products grid */
+.products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1rem}
+
+/* Product card */
+.prd-card{
+  background:#0a0f1e;border:1px solid #1e293b;border-radius:14px;
+  padding:1.25rem 1.5rem;text-decoration:none;color:inherit;
+  display:block;transition:all .2s;position:relative;overflow:hidden;
+}
+.prd-card:hover{transform:translateY(-2px)}
+.prd-card.no-link{cursor:default}
+
+.env-agentic .prd-card:hover{border-color:#7c6fcd55;box-shadow:0 8px 32px #7c6fcd18}
+.env-light   .prd-card:hover{border-color:#0ea5e955;box-shadow:0 8px 32px #0ea5e918}
+.env-agentic .prd-card.featured{border-color:#7c6fcd44;background:linear-gradient(135deg,#13103a,#0a0f1e)}
+.env-light   .prd-card.featured{border-color:#0ea5e944;background:linear-gradient(135deg,#071e33,#07090f)}
+
+.prd-head{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
+.prd-icon{font-size:1.7rem;flex-shrink:0}
+.prd-title-wrap{}
+.prd-title{font-size:.98rem;font-weight:700;color:#e2e8f0;line-height:1.2}
+.prd-status{font-size:.65rem;font-weight:700;padding:.15rem .55rem;border-radius:20px;display:inline-block;margin-top:.25rem;letter-spacing:.04em}
+.stat-live{background:#10b98122;color:#34d399;border:1px solid #10b98144}
+.stat-int{background:#f59e0b22;color:#fbbf24;border:1px solid #f59e0b44}
+.stat-api{background:#3b82f622;color:#60a5fa;border:1px solid #3b82f644}
+.stat-legacy{background:#64748b22;color:#94a3b8;border:1px solid #64748b44}
+
+.prd-url{
+  font-family:monospace;font-size:.73rem;padding:.25rem .6rem;border-radius:6px;
+  margin-bottom:.75rem;word-break:break-all;display:block;
+}
+.env-agentic .prd-url{background:#7c6fcd11;color:#7c6fcd;border:1px solid #7c6fcd22}
+.env-light   .prd-url{background:#0ea5e911;color:#38bdf8;border:1px solid #0ea5e922}
+
+.prd-desc{font-size:.82rem;color:#64748b;line-height:1.5;margin-bottom:.85rem}
+.prd-tags{display:flex;flex-wrap:wrap;gap:.35rem}
+.ptag{font-size:.68rem;background:#1e293b;border:1px solid #334155;border-radius:20px;padding:.14rem .55rem;color:#94a3b8}
+
+/* Architecture strip per env */
+.arch-strip{
+  margin-top:2rem;padding:1.25rem 1.5rem;
+  border-radius:14px;border:1px solid #1e293b;background:#07090f;
+}
+.arch-strip-title{font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:1rem}
+.env-agentic .arch-strip-title{color:#7c6fcd}
+.env-light   .arch-strip-title{color:#38bdf8}
+.arch-layers{display:flex;gap:.5rem;flex-wrap:wrap;align-items:stretch}
+.arch-layer{
+  flex:1;min-width:140px;background:#0a0f1e;border:1px solid #1e293b;
+  border-radius:10px;padding:.85rem 1rem;
+}
+.arch-layer-name{font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.6rem}
+.env-agentic .arch-layer-name{color:#7c6fcd99}
+.env-light   .arch-layer-name{color:#0ea5e999}
+.arch-comps{display:flex;flex-direction:column;gap:.35rem}
+.arch-comp{
+  font-size:.75rem;color:#94a3b8;background:#1e293b;
+  border-radius:6px;padding:.3rem .6rem;line-height:1.3;
+}
+.arch-arrow{
+  display:flex;align-items:center;color:#334155;font-size:1.2rem;
+  align-self:center;flex-shrink:0;
+}
+
+/* Separator between envs */
+.env-separator{
+  display:flex;align-items:center;gap:1.5rem;margin:1rem 0 2.5rem;
+  font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:#334155;
+}
+.env-separator::before,.env-separator::after{content:'';flex:1;height:1px;background:linear-gradient(to right,transparent,#1e293b,transparent)}
+
+/* Bottom links */
+.bottom-links{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;
+  margin-top:2.5rem;
+}
+.blink{
+  background:#0a0f1e;border:1px solid #1e293b;border-radius:12px;
+  padding:1rem 1.25rem;text-decoration:none;color:inherit;
+  display:flex;align-items:center;gap:.75rem;transition:all .2s;
+}
+.blink:hover{border-color:#7c6fcd55;background:#0f1523}
+.blink-icon{font-size:1.4rem;flex-shrink:0}
+.blink-text{}
+.blink-title{font-size:.88rem;font-weight:700;color:#e2e8f0;margin-bottom:.1rem}
+.blink-sub{font-size:.75rem;color:#64748b}
+
+/* Footer */
+.footer{text-align:center;padding:1.5rem;font-size:.78rem;color:#334155;margin-top:2rem;border-top:1px solid #1e293b}
+.footer strong{color:#7c6fcd}
+
+/* Responsive */
+@media(max-width:768px){
+  .page{padding:1.25rem 1rem}
+  .hero h1{font-size:1.6rem}
+  .env-header{flex-direction:column}
+  .env-infra{align-items:flex-start}
+  .arch-layers{flex-direction:column}
+  .arch-arrow{transform:rotate(90deg);align-self:center}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Lock screen ──────────────────────────────────── -->
+<div id="lock">
+  <div class="lock-card">
+    <div class="lock-hex">⚡</div>
+    <h1>ANTHENE <span>Portal</span></h1>
+    <p>Anthene-tuoteperheen ylätason portaali.<br>Syötä salasana jatkaaksesi.</p>
+    <input id="pw" type="password" class="lock-input" placeholder="••••••••" autocomplete="off" />
+    <button class="lock-btn" onclick="checkPw()">Avaa portaali</button>
+    <div id="pw-err" class="lock-err">Väärä salasana</div>
+  </div>
+</div>
+
+<!-- ── Portal ────────────────────────────────────────── -->
+<div id="portal">
+
+  <div class="topbar">
+    <div class="topbar-logo">⚡</div>
+    <div>
+      <div class="topbar-name">ANTHENE <span>Portal</span></div>
+      <div class="topbar-sub">Tuoteperhe · Kaikki ympäristöt</div>
+    </div>
+    <div class="topbar-right">
+      <span class="env-badge badge-agentic">Agentic</span>
+      <span class="env-badge badge-light">Light</span>
+      <span class="badge-year">2026</span>
+    </div>
+  </div>
+
+  <div class="page">
+
+    <!-- Hero -->
+    <div class="hero">
+      <span class="hero-eyebrow">Vivicta · Anthene Product Family</span>
+      <h1>Kaksi erillistä ympäristöä,<br>yksi <em>Anthene</em>-tuoteperhe</h1>
+      <p>Anthene koostuu kahdesta täysin toisistaan riippumattomasta Azure-ympäristöstä — <strong>Anthene Agentic</strong> ja <strong>Anthene Light</strong> — joilla on omat resurssit, autentikointi ja infrastruktuuri.</p>
+      <div class="hero-badges">
+        <span class="hero-badge hb-agentic">⚡ Anthene Agentic — Container Apps · Cosmos DB · B2C</span>
+        <span class="hero-badge hb-light">🔵 Anthene Light — App Service · MapLibre · ADS-B</span>
+        <span class="hero-badge hb-indep">🔒 Täysin toisistaan riippumattomat</span>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         YMPÄRISTÖ 1: ANTHENE AGENTIC
+    ══════════════════════════════════ -->
+    <div class="env-block env-agentic">
+      <div class="env-header">
+        <div class="env-title-block">
+          <div class="env-env-tag etag-agentic">⚡ Ympäristö 1 · Tuotantoalusta</div>
+          <div class="env-title">Anthene <em>Agentic</em></div>
+          <div class="env-desc">
+            Täysimittainen agenttinen AI-alusta — käyttäjät luovat, operoivat ja jakavat LangGraph-pohjaisia AI-agentteja.
+            21 avoimen datan datalähdettä, Azure AD B2C -autentikaatio, SSE-striimaus, käyttäjähallinta.
+          </div>
+        </div>
+        <div class="env-infra">
+          <div class="infra-pill ip-agentic">☁️ Azure Container Apps</div>
+          <div class="infra-pill ip-agentic">🗄️ Cosmos DB (Serverless)</div>
+          <div class="infra-pill ip-agentic">🔐 Azure AD B2C</div>
+          <div class="infra-pill ip-agentic">📦 ACR · Azure Container Registry</div>
+          <div class="infra-pill ip-neutral">🌍 Region: Sweden Central</div>
+          <div class="infra-pill ip-neutral">📁 RG: anthene-agentic-rg</div>
+        </div>
+      </div>
+
+      <!-- Products -->
+      <div class="sec-label">🧩 Sovellukset ja palvelut</div>
+      <div class="products-grid">
+
+        <a class="prd-card featured" href="https://agreeable-bay-0c9251203.7.azurestaticapps.net" target="_blank">
+          <div class="prd-head">
+            <span class="prd-icon">⚙️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Agent Creator</div>
+              <span class="prd-status stat-live">● LIVE · SWA</span>
+            </div>
+          </div>
+          <span class="prd-url">agreeable-bay-0c9251203.7.azurestaticapps.net</span>
+          <div class="prd-desc">Agentin luonti, muokkaus ja testaus. AI-konsultti (sparrailu), käyttäjähallinta, AgentStore-selaus, AOI-kartta.</div>
+          <div class="prd-tags">
+            <span class="ptag">React + Vite</span><span class="ptag">MSAL B2C</span>
+            <span class="ptag">LangGraph</span><span class="ptag">AI-konsultti</span>
+          </div>
+        </a>
+
+        <a class="prd-card featured" href="https://blue-sky-0cf955303.7.azurestaticapps.net" target="_blank">
+          <div class="prd-head">
+            <span class="prd-icon">🏪</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">AgentStore + Prophet</div>
+              <span class="prd-status stat-live">● LIVE · SWA</span>
+            </div>
+          </div>
+          <span class="prd-url">blue-sky-0cf955303.7.azurestaticapps.net</span>
+          <div class="prd-desc">AgentStore: selaa ja käynnistä jaettuja agentteja. Prophet: operaattorinäkymä kiinnitetyille agenteille.</div>
+          <div class="prd-tags">
+            <span class="ptag">React</span><span class="ptag">SSE Streaming</span>
+            <span class="ptag">Operator UI</span><span class="ptag">AgentStore</span>
+          </div>
+        </a>
+
+        <a class="prd-card" href="https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io/api/health" target="_blank">
+          <div class="prd-head">
+            <span class="prd-icon">🔌</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Anthene API</div>
+              <span class="prd-status stat-api">● API · Container App</span>
+            </div>
+          </div>
+          <span class="prd-url">anthene-api.greensea-93121b9f…azurecontainerapps.io</span>
+          <div class="prd-desc">FastAPI backend. JWT-autentikaatio, CRUD, LangGraph SSE-suoritus, AI-konsultti (/api/consult), RBAC-käyttäjähallinta.</div>
+          <div class="prd-tags">
+            <span class="ptag">FastAPI</span><span class="ptag">LangGraph</span>
+            <span class="ptag">gpt-4o</span><span class="ptag">RBAC</span>
+          </div>
+        </a>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">🛠️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Tool Hub</div>
+              <span class="prd-status stat-int">● INTERNAL · Container App</span>
+            </div>
+          </div>
+          <span class="prd-url" style="cursor:default">anthene-toolhub.internal.…azurecontainerapps.io</span>
+          <div class="prd-desc">21 avoimen datan työkalu. Ilmailu, sää, ympäristö, energia, säteily, katastrofit, paikkatiedot, tiedustelu.</div>
+          <div class="prd-tags">
+            <span class="ptag">21 tools</span><span class="ptag">FastAPI</span>
+            <span class="ptag">Internal only</span><span class="ptag">10 kategoriaa</span>
+          </div>
+        </div>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">🗄️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Cosmos DB</div>
+              <span class="prd-status stat-int">● INTERNAL · NoSQL</span>
+            </div>
+          </div>
+          <span class="prd-url" style="cursor:default">anthene-agentic-cosmos.documents.azure.com</span>
+          <div class="prd-desc">Tietokanta: agents, users, agent_runs, invites. Partition key /id tai /owner_id. Serverless billing.</div>
+          <div class="prd-tags">
+            <span class="ptag">Serverless</span><span class="ptag">4 containeria</span>
+            <span class="ptag">Swedencentral</span>
+          </div>
+        </div>
+
+        <a class="prd-card" href="architecture.html" target="_blank">
+          <div class="prd-head">
+            <span class="prd-icon">📐</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Arkkitehtuuriportaali</div>
+              <span class="prd-status stat-live">● DOCS</span>
+            </div>
+          </div>
+          <span class="prd-url">architecture.html (salasanasuojattu)</span>
+          <div class="prd-desc">Yksityiskohtainen arkkitehtuurikuvaus: kaikki API-endpointit, työkalukatalogi, Azure-infrastruktuuri.</div>
+          <div class="prd-tags">
+            <span class="ptag">API-docs</span><span class="ptag">Infra</span>
+            <span class="ptag">Tools</span><span class="ptag">🔒 Jallukola</span>
+          </div>
+        </a>
+
+      </div>
+
+      <!-- Architecture strip -->
+      <div class="arch-strip">
+        <div class="arch-strip-title">🏗️ Arkkitehtuurikerrokset — Anthene Agentic</div>
+        <div class="arch-layers">
+          <div class="arch-layer">
+            <div class="arch-layer-name">🖥️ Frontend</div>
+            <div class="arch-comps">
+              <div class="arch-comp">Agent Creator (SWA)</div>
+              <div class="arch-comp">AgentStore (SWA)</div>
+              <div class="arch-comp">Prophet / Operator (SWA)</div>
+              <div class="arch-comp">MSAL Azure B2C</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">⚙️ Backend API</div>
+            <div class="arch-comps">
+              <div class="arch-comp">FastAPI (Container App)</div>
+              <div class="arch-comp">LangGraph ReAct</div>
+              <div class="arch-comp">SSE Streaming</div>
+              <div class="arch-comp">RBAC (admin/editor/viewer)</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">🧠 AI</div>
+            <div class="arch-comps">
+              <div class="arch-comp">Azure OpenAI gpt-4o</div>
+              <div class="arch-comp">LangGraph orkestrointi</div>
+              <div class="arch-comp">AI-konsultti (/api/consult)</div>
+              <div class="arch-comp">Thinking mode</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">🛠️ Tool Hub</div>
+            <div class="arch-comps">
+              <div class="arch-comp">21 avoimen datan API</div>
+              <div class="arch-comp">Internal Container App</div>
+              <div class="arch-comp">FMI, Fingrid, STUK…</div>
+              <div class="arch-comp">ADS-B, NASA FIRMS…</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">🗄️ Data</div>
+            <div class="arch-comps">
+              <div class="arch-comp">Cosmos DB Serverless</div>
+              <div class="arch-comp">Azure AD B2C (auth)</div>
+              <div class="arch-comp">ACR (Docker images)</div>
+              <div class="arch-comp">Key Vault (secrets)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Separator -->
+    <div class="env-separator">Täysin erillinen ympäristö · Ei yhteistä infrastruktuuria</div>
+
+    <!-- ══════════════════════════════════
+         YMPÄRISTÖ 2: ANTHENE LIGHT
+    ══════════════════════════════════ -->
+    <div class="env-block env-light">
+      <div class="env-header">
+        <div class="env-title-block">
+          <div class="env-env-tag etag-light">🔵 Ympäristö 2 · Demo &amp; Pilot</div>
+          <div class="env-title">Anthene <em>Light</em></div>
+          <div class="env-desc">
+            Tilannekuva- ja lentoanalyysidemo. Reaaliaikainen ADS-B-ilmaliikenneseuranta, AOI-polygonianalyysi,
+            MapLibre-karttapohja, LangGraph-lentokonsultti. Azure App Service -pohjainen backend.
+          </div>
+        </div>
+        <div class="env-infra">
+          <div class="infra-pill ip-light">☁️ Azure App Service</div>
+          <div class="infra-pill ip-light">🌐 Azure Static Web Apps</div>
+          <div class="infra-pill ip-light">🗺️ MapLibre GL</div>
+          <div class="infra-pill ip-light">✈️ ADS-B Exchange API</div>
+          <div class="infra-pill ip-neutral">🌍 Region: West Europe / Sweden Central</div>
+          <div class="infra-pill ip-neutral">📁 RG: anthene-simple-rg</div>
+        </div>
+      </div>
+
+      <div class="sec-label">🧩 Sovellukset ja palvelut</div>
+      <div class="products-grid">
+
+        <a class="prd-card featured" href="https://nice-sand-005a44f03.7.azurestaticapps.net" target="_blank">
+          <div class="prd-head">
+            <span class="prd-icon">✈️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Flight Analyst</div>
+              <span class="prd-status stat-live">● LIVE · SWA</span>
+            </div>
+          </div>
+          <span class="prd-url">nice-sand-005a44f03.7.azurestaticapps.net</span>
+          <div class="prd-desc">Reaaliaikainen lentoliikenteen seuranta. Useat AOI-ikkunat, LangGraph-lentokonsultti, Telegram-hälytykset.</div>
+          <div class="prd-tags">
+            <span class="ptag">MapLibre GL Draw</span><span class="ptag">ADS-B live</span>
+            <span class="ptag">LangGraph</span><span class="ptag">Telegram</span>
+          </div>
+        </a>
+
+        <div class="prd-card">
+          <div class="prd-head">
+            <span class="prd-icon">🖥️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Operator Dashboard</div>
+              <span class="prd-status stat-legacy">● SWA · Demo</span>
+            </div>
+          </div>
+          <div class="prd-desc">Operaattorikojelauta. Karttapohjainen reaaliaikainen tilannekuva, lentokoneet, alukset, radat.</div>
+          <div class="prd-tags">
+            <span class="ptag">MapLibre</span><span class="ptag">AIS + ADS-B</span><span class="ptag">React</span>
+          </div>
+        </div>
+
+        <div class="prd-card">
+          <div class="prd-head">
+            <span class="prd-icon">🎛️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Simulation Control</div>
+              <span class="prd-status stat-legacy">● SWA · Demo</span>
+            </div>
+          </div>
+          <div class="prd-desc">Simulaation hallintapaneeli. Radar- ja ADS-B-simulaattorin konfigurointi ja käynnistys.</div>
+          <div class="prd-tags">
+            <span class="ptag">React</span><span class="ptag">Sim control</span>
+          </div>
+        </div>
+
+        <div class="prd-card">
+          <div class="prd-head">
+            <span class="prd-icon">🔬</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Analyst UI</div>
+              <span class="prd-status stat-legacy">● SWA · Demo</span>
+            </div>
+          </div>
+          <div class="prd-desc">Analyysikäyttöliittymä. Historiatiedot, EFFIS-palot, säädata, MapLibre-karttanäkymä.</div>
+          <div class="prd-tags">
+            <span class="ptag">EFFIS</span><span class="ptag">FMI</span><span class="ptag">MapLibre</span>
+          </div>
+        </div>
+
+        <a class="prd-card" href="https://anthene-functions-k73hhxyzyk6c4.azurewebsites.net/api" target="_blank">
+          <div class="prd-head">
+            <span class="prd-icon">⚙️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Backend API</div>
+              <span class="prd-status stat-api">● App Service · API</span>
+            </div>
+          </div>
+          <span class="prd-url">anthene-functions-k73hhxyzyk6c4.azurewebsites.net</span>
+          <div class="prd-desc">FastAPI backend: ADS-B-haku, lentoradat, alusliikennedata, simulaatiodata, LangGraph-lentokonsultti, Telegram.</div>
+          <div class="prd-tags">
+            <span class="ptag">FastAPI</span><span class="ptag">ADS-B Exchange</span>
+            <span class="ptag">Telegram Bot</span><span class="ptag">LangGraph</span>
+          </div>
+        </a>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">📡</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Telegram Bot</div>
+              <span class="prd-status stat-live">● Aktiivinen</span>
+            </div>
+          </div>
+          <div class="prd-desc">Anthena Flight Alerts -kanava. Automaattiset hälytykset: sotilaskoneet, hätäkoodit, liikennepiikkejä.</div>
+          <div class="prd-tags">
+            <span class="ptag">Bot: @AntheneBot</span><span class="ptag">Telegram Channel</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Architecture strip -->
+      <div class="arch-strip">
+        <div class="arch-strip-title">🏗️ Arkkitehtuurikerrokset — Anthene Light</div>
+        <div class="arch-layers">
+          <div class="arch-layer">
+            <div class="arch-layer-name">🖥️ Frontend</div>
+            <div class="arch-comps">
+              <div class="arch-comp">Flight Analyst (SWA)</div>
+              <div class="arch-comp">Operator Dashboard (SWA)</div>
+              <div class="arch-comp">Simulation Control (SWA)</div>
+              <div class="arch-comp">Ei kirjautumista (open)</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">⚙️ Backend</div>
+            <div class="arch-comps">
+              <div class="arch-comp">FastAPI (App Service)</div>
+              <div class="arch-comp">LangGraph lentokonsultti</div>
+              <div class="arch-comp">SSE Streaming</div>
+              <div class="arch-comp">Telegram-integraatio</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">🧠 AI</div>
+            <div class="arch-comps">
+              <div class="arch-comp">Azure OpenAI gpt-4o</div>
+              <div class="arch-comp">4 ADS-B-työkalua</div>
+              <div class="arch-comp">Lentokonsultti-agentti</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">📡 Data</div>
+            <div class="arch-comps">
+              <div class="arch-comp">ADS-B Exchange API</div>
+              <div class="arch-comp">OpenSky Network</div>
+              <div class="arch-comp">Radasimulaattori</div>
+              <div class="arch-comp">Telegram Bot API</div>
+            </div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-layer">
+            <div class="arch-layer-name">🗺️ Kartta</div>
+            <div class="arch-comps">
+              <div class="arch-comp">MapLibre GL</div>
+              <div class="arch-comp">MapLibre GL Draw</div>
+              <div class="arch-comp">AOI polygonianalyysi</div>
+              <div class="arch-comp">Esri / CartoCDN</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom links -->
+    <div class="sec-label" style="color:#64748b;margin-top:1rem">
+      🔗 Pikavalinnat
+      <span style="font-size:.7rem;letter-spacing:.12em;text-transform:uppercase"></span>
+    </div>
+    <div class="bottom-links">
+      <a class="blink" href="https://agreeable-bay-0c9251203.7.azurestaticapps.net" target="_blank">
+        <span class="blink-icon">⚙️</span>
+        <div class="blink-text">
+          <div class="blink-title">Agent Creator</div>
+          <div class="blink-sub">Agentic · SWA · Live</div>
+        </div>
+      </a>
+      <a class="blink" href="https://blue-sky-0cf955303.7.azurestaticapps.net" target="_blank">
+        <span class="blink-icon">🏪</span>
+        <div class="blink-text">
+          <div class="blink-title">AgentStore + Prophet</div>
+          <div class="blink-sub">Agentic · SWA · Live</div>
+        </div>
+      </a>
+      <a class="blink" href="https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io/api/health" target="_blank">
+        <span class="blink-icon">🔌</span>
+        <div class="blink-text">
+          <div class="blink-title">Agentic API Health</div>
+          <div class="blink-sub">Container App · /api/health</div>
+        </div>
+      </a>
+      <a class="blink" href="architecture.html" target="_blank">
+        <span class="blink-icon">📐</span>
+        <div class="blink-text">
+          <div class="blink-title">Agentic Arkkitehtuuriportaali</div>
+          <div class="blink-sub">API-docs · Tools · Infra</div>
+        </div>
+      </a>
+      <a class="blink" href="https://nice-sand-005a44f03.7.azurestaticapps.net" target="_blank">
+        <span class="blink-icon">✈️</span>
+        <div class="blink-text">
+          <div class="blink-title">Flight Analyst</div>
+          <div class="blink-sub">Light · SWA · Live</div>
+        </div>
+      </a>
+      <a class="blink" href="https://anthene-functions-k73hhxyzyk6c4.azurewebsites.net/api" target="_blank">
+        <span class="blink-icon">⚙️</span>
+        <div class="blink-text">
+          <div class="blink-title">Light API</div>
+          <div class="blink-sub">App Service · ADS-B</div>
+        </div>
+      </a>
+    </div>
+
+  </div><!-- /page -->
+
+  <div class="footer">
+    Powered by <strong>Vivicta</strong> &nbsp;·&nbsp; Anthene Product Family &nbsp;·&nbsp; ssivonen 2026
+  </div>
+
+</div><!-- /portal -->
+
+<script>
+const HASH = '401315c8810bda5938114bf5bf9e41250dd73e27e4db4d7337f4e4aae2004db1'
+
+async function sha256(msg) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg))
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('')
+}
+
+async function checkPw() {
+  const val = document.getElementById('pw').value
+  const h = await sha256(val)
+  if (h === HASH) {
+    sessionStorage.setItem('anthene_portal_auth','1')
+    document.getElementById('lock').style.display = 'none'
+    document.getElementById('portal').style.display = 'block'
+  } else {
+    document.getElementById('pw-err').style.display = 'block'
+    document.getElementById('pw').value = ''
+    document.getElementById('pw').focus()
+  }
+}
+
+document.getElementById('pw').addEventListener('keydown', e => { if(e.key==='Enter') checkPw() })
+
+if (sessionStorage.getItem('anthene_portal_auth') === '1') {
+  document.getElementById('lock').style.display = 'none'
+  document.getElementById('portal').style.display = 'block'
+}
+</script>
+</body>
+</html>

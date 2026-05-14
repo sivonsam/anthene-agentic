@@ -38,6 +38,7 @@ export function createApiClient(getToken) {
 
     // User
     getMe: () => call('/api/users/me'),
+    updateMe: (body) => call('/api/users/me', { method: 'PATCH', body: JSON.stringify(body) }),
 
     // Runs
     listRuns: () => call('/api/runs'),

@@ -323,7 +323,7 @@ function Prophet({ user, getToken, onLogout }) {
             </div>
           )}
           {!sidebarCollapsed && (
-            <div className="sidebar-powered">Powered by <strong>Vivicta</strong></div>
+            <div className="sidebar-powered">Powered by <strong>Vivicta</strong> · v1.0 · ssivonen 2026</div>
           )}
         </div>
       </aside>

@@ -379,7 +379,7 @@ export default function App() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <footer className="app-footer">
-        Powered by <strong>Vivicta</strong>
+        Powered by <strong>Vivicta</strong> · v1.0 · ssivonen 2026
       </footer>
     </div>
   )

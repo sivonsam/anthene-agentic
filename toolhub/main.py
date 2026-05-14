@@ -66,6 +66,8 @@ def list_tools():
             "name": meta["name"],
             "description": meta["description"],
             "parameters": meta["parameters"],
+            "category": meta.get("category", "tiedustelu"),
+            "category_label": meta.get("category_label", "🔍 Tiedustelu & Analytiikka"),
         }
         for tid, meta in TOOL_REGISTRY.items()
     ]

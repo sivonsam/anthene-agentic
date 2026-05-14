@@ -1,8 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react'
+const AOIMap = lazy(() => import('./AOIMap'))
 
 const CATEGORIES = [
-  'aluevalvonta', 'yleinen', 'kriittinen-infra', 'liikenne',
-  'meri', 'ilma', 'sensorfusion', 'anomaliat', 'halytykset', 'analyysit'
+  { value: 'aluevalvonta', label: '🗺️ Aluevalvonta',         desc: 'AOI-pohjainen aluevalvonta' },
+  { value: 'liikenne',     label: '🚦 Liikenne & Logistiikka', desc: 'Ilma-, meri- ja tieliikenne' },
+  { value: 'ymparisto',    label: '🌿 Ympäristö & Luonto',    desc: 'Tulipalot, luonnonilmiöt, ekologia' },
+  { value: 'energia',      label: '⚡ Energia & Kriittinen infra', desc: 'Sähköverkko, kaasu, ydinvoima' },
+  { value: 'turvallisuus', label: '🛡️ Turvallisuus & Pelastus', desc: 'Pelastus, rajavalvonta, turvallisuus' },
+  { value: 'tiedustelu',   label: '🔍 Tilannekuva & Analytiikka', desc: 'Tiedustelu, raportointi, analyysit' },
+  { value: 'halytin',      label: '🔔 Hälytin & Automatisointi', desc: 'Kynnysarvopohjainen automaattinen hälytin' },
+  { value: 'yleinen',      label: '⚙️ Yleinen',               desc: 'Yleiskäyttöinen agentti' },
 ]
 const MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'phi-3-medium', 'mistral-large']
 const VISIBILITIES = [
@@ -11,6 +18,7 @@ const VISIBILITIES = [
 ]
 
 export default function AgentForm({ tools = [], initial = null, onSave, onCancel, loading }) {
+  const isPrefill = initial?.id === '__prefill__'
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -21,8 +29,21 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
     category: 'yleinen',
     graph_type: 'react',
     memory_scope: 'conversation',
+    aoi: null,
     ...initial,
   })
+
+  // Re-fill when consultant passes a new prefill config
+  useEffect(() => {
+    if (initial) {
+      setForm({
+        name: '', description: '', system_prompt: '', tools: [],
+        model: 'gpt-4o', visibility: 'private', category: 'yleinen',
+        graph_type: 'react', memory_scope: 'conversation', aoi: null,
+        ...initial,
+      })
+    }
+  }, [initial?.id])
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
@@ -64,7 +85,7 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
         <div className="form-section">
           <label>Kategoria</label>
           <select value={form.category} onChange={e => set('category', e.target.value)}>
-            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </div>
         <div className="form-section">
@@ -91,19 +112,32 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
 
       <div className="form-section">
         <label>Työkalut ({form.tools.length} valittu)</label>
-        <div className="tools-grid">
-          {tools.map(t => (
-            <label key={t.id} className={`tool-chip ${form.tools.includes(t.id) ? 'selected' : ''}`}>
-              <input
-                type="checkbox"
-                checked={form.tools.includes(t.id)}
-                onChange={() => toggleTool(t.id)}
-              />
-              <span className="tool-name">{t.name}</span>
-              <span className="tool-desc">{t.description.slice(0, 60)}…</span>
-            </label>
-          ))}
-        </div>
+        {(() => {
+          const grouped = tools.reduce((acc, t) => {
+            const key = t.category_label || '🔍 Tiedustelu & Analytiikka'
+            if (!acc[key]) acc[key] = []
+            acc[key].push(t)
+            return acc
+          }, {})
+          return Object.entries(grouped).map(([groupLabel, groupTools]) => (
+            <div key={groupLabel} className="tool-group">
+              <div className="tool-group-header">{groupLabel}</div>
+              <div className="tools-grid">
+                {groupTools.map(t => (
+                  <label key={t.id} className={`tool-chip ${form.tools.includes(t.id) ? 'selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={form.tools.includes(t.id)}
+                      onChange={() => toggleTool(t.id)}
+                    />
+                    <span className="tool-name">{t.name}</span>
+                    <span className="tool-desc">{t.description.slice(0, 60)}…</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))
+        })()}
       </div>
 
       <div className="form-section">
@@ -127,6 +161,14 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
         </div>
       </div>
 
+      <div className="form-section">
+        <label>🗺️ Valvonta-alue (AOI) — valinnainen</label>
+        <p className="field-hint">Piirrä kartalle maantieteellinen alue, jonka sisällä agentti toimii. Alue välitetään automaattisesti geotyökaluille.</p>
+        <Suspense fallback={<div className="map-loading">Ladataan karttaa…</div>}>
+          <AOIMap value={form.aoi} onChange={val => set('aoi', val)} />
+        </Suspense>
+      </div>
+
       <div className="form-row">
         <div className="form-section">
           <label>Muistityyppi</label>
@@ -146,7 +188,7 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
       </div>
 
       <div className="form-actions">
-        {onCancel && <button type="button" className="btn-secondary" onClick={onCancel}>Peruuta</button>}
+        {onCancel && <button type="button" className="btn-secondary" onClick={onCancel}>Peruuta muokkaus</button>}
         <button type="submit" className="btn-primary" disabled={loading}>
           {loading ? 'Tallennetaan…' : initial ? '💾 Päivitä agentti' : '🚀 Luo agentti'}
         </button>

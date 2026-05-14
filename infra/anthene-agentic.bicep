@@ -127,6 +127,20 @@ resource containerUsers 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/cont
   }
 }
 
+resource containerInvites 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-02-15-preview' = {
+  parent: cosmosDatabase
+  name: 'invites'
+  properties: {
+    resource: {
+      id: 'invites'
+      partitionKey: {
+        paths: ['/id']
+        kind: 'Hash'
+      }
+    }
+  }
+}
+
 // ============================================================
 // Azure Container Apps Environment
 // ============================================================

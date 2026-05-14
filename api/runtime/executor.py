@@ -22,9 +22,10 @@ from typing import AsyncIterator
 
 import httpx
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain_core.tools import tool as lc_tool
+from langchain_core.tools import StructuredTool
 from langchain_openai import AzureChatOpenAI
 from langgraph.prebuilt import create_react_agent
+from pydantic import BaseModel, Field, create_model
 
 logger = logging.getLogger(__name__)
 
@@ -51,32 +52,67 @@ def _make_llm(model_name: str) -> AzureChatOpenAI:
 
 async def _fetch_tool_list() -> list[dict]:
     """Fetch available tools from Tool Hub."""
-    async with httpx.AsyncClient(timeout=10, follow_redirects=True, verify=False) as client:
+    async with httpx.AsyncClient(timeout=10, follow_redirects=False, verify=False) as client:
         resp = await client.get(f"{TOOLHUB_URL}/tools")
         resp.raise_for_status()
         return resp.json()
 
 
-def _build_lc_tool(tool_meta: dict) -> object:
-    """Build a LangChain tool that calls the Tool Hub."""
+def _build_lc_tool(tool_meta: dict, aoi_bbox: dict | None = None) -> StructuredTool:
+    """Build a typed LangChain StructuredTool that calls the Tool Hub."""
     tool_id = tool_meta["id"]
-    tool_name = tool_meta["name"].replace(" ", "_").lower()
+    # OpenAI tool names: only [a-zA-Z0-9_.-] allowed
+    import re
+    tool_name = re.sub(r'[^a-zA-Z0-9_.\-]', '_', tool_meta["name"]).strip('_').lower()
+    tool_name = re.sub(r'_+', '_', tool_name)  # collapse multiple underscores
     tool_desc = tool_meta["description"]
+    parameters = tool_meta.get("parameters", {})
 
-    @lc_tool(tool_name)
-    async def dynamic_tool(**kwargs) -> str:
-        f"""Call {tool_name} via Anthene Tool Hub. {tool_desc}"""
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True, verify=False) as client:
+    _type_map = {"number": float, "integer": int, "string": str, "boolean": bool}
+    field_defs: dict = {}
+    for pname, pinfo in parameters.items():
+        py_type = _type_map.get(pinfo.get("type", "string"), str)
+        field_defs[pname] = (py_type, Field(default=None, description=pinfo.get("description", "")))
+
+    InputModel: type[BaseModel] | None = (
+        create_model(f"{tool_name}_args", **field_defs) if field_defs else None
+    )
+
+    # Pre-fill geo defaults from AOI bounding box
+    _geo_defaults: dict = {}
+    if aoi_bbox and parameters:
+        for pname in parameters:
+            if pname in aoi_bbox:
+                _geo_defaults[pname] = aoi_bbox[pname]
+
+    async def _call(**kwargs) -> str:
+        merged = {**_geo_defaults, **{k: v for k, v in kwargs.items() if v is not None}}
+        async with httpx.AsyncClient(timeout=30, follow_redirects=False, verify=False) as client:
             resp = await client.post(
                 f"{TOOLHUB_URL}/tools/call/{tool_id}",
-                json={"args": kwargs},
+                json={"args": merged},
             )
             resp.raise_for_status()
             data = resp.json()
         return json.dumps(data.get("result", {}), ensure_ascii=False)
 
-    dynamic_tool.__doc__ = tool_desc
-    return dynamic_tool
+    if InputModel:
+        return StructuredTool.from_function(
+            coroutine=_call,
+            name=tool_name,
+            description=tool_desc,
+            args_schema=InputModel,
+        )
+
+    # No-parameter tool
+    async def _call_noargs() -> str:
+        return await _call()
+
+    return StructuredTool.from_function(
+        coroutine=_call_noargs,
+        name=tool_name,
+        description=tool_desc,
+    )
 
 
 async def run_agent_stream(
@@ -95,13 +131,36 @@ async def run_agent_stream(
         all_tools = await _fetch_tool_list()
         enabled_ids = set(agent_def.get("tools", []))
         selected_tools = [t for t in all_tools if t["id"] in enabled_ids]
-        lc_tools = [_build_lc_tool(t) for t in selected_tools]
+
+        # AOI — inject bounding box as default args for geo tools
+        aoi = agent_def.get("aoi")  # GeoJSON Polygon geometry | None
+        aoi_bbox: dict | None = None
+        if aoi and aoi.get("type") == "Polygon":
+            coords = aoi["coordinates"][0]
+            lats = [c[1] for c in coords]
+            lons = [c[0] for c in coords]
+            aoi_bbox = {
+                "lat": (min(lats) + max(lats)) / 2,
+                "lon": (min(lons) + max(lons)) / 2,
+                "lat_min": min(lats), "lat_max": max(lats),
+                "lon_min": min(lons), "lon_max": max(lons),
+            }
+
+        lc_tools = [_build_lc_tool(t, aoi_bbox) for t in selected_tools]
 
         # Build LLM
         llm = _make_llm(agent_def.get("model", "gpt-4o"))
 
-        # Build graph
+        # Build system prompt — append AOI context when defined
         system_prompt = agent_def.get("system_prompt", "You are a helpful assistant.")
+        if aoi_bbox:
+            system_prompt += (
+                f"\n\nValvonta-alue (AOI) on määritetty. Käytä aina tätä aluetta geotyökaluissa ellei käyttäjä erikseen pyydä muuta:\n"
+                f"- Keskipiste: lat={aoi_bbox['lat']:.4f}, lon={aoi_bbox['lon']:.4f}\n"
+                f"- Kattavuus: lat {aoi_bbox['lat_min']:.4f}–{aoi_bbox['lat_max']:.4f}, "
+                f"lon {aoi_bbox['lon_min']:.4f}–{aoi_bbox['lon_max']:.4f}\n"
+                f"Analysoi tapahtumat tällä alueella."
+            )
         graph = create_react_agent(llm, lc_tools)
 
         # Session memory

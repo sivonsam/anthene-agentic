@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function AgentCard({ agent, onEdit, onDelete, onTest, onCopy, onPreview, showOwner = false }) {
+export default function AgentCard({ agent, onEdit, onDelete, onTest, onCopy, onPreview, showOwner = false, onPinOperator, isPinned = false }) {
   const categoryColors = {
     security: '#ef4444',
     environmental: '#22c55e',
@@ -54,19 +54,28 @@ export default function AgentCard({ agent, onEdit, onDelete, onTest, onCopy, onP
       )}
 
       <div className="agent-card-actions">
+        {onPinOperator && (
+          <button
+            className={`btn-action btn-pin ${isPinned ? 'pinned' : ''}`}
+            onClick={() => onPinOperator(agent)}
+            title={isPinned ? 'Poista Operaattori-UI:sta' : 'Vie Operaattori-UI:hin'}
+          >
+            {isPinned ? '📌 Pinnattu' : '📌 Operaattorille'}
+          </button>
+        )}
         {onPreview && (
-          <button className="btn-action btn-preview" onClick={() => onPreview(agent)} title="Esikatsele">
+          <button className="btn-action btn-preview" onClick={() => onPreview(agent)} title="Esikatsele agenttia">
             👁 Esikatsele
           </button>
         )}
         {onTest && (
-          <button className="btn-action btn-test" onClick={() => onTest(agent)} title="Testaa">
-            ▶ Testaa
+          <button className="btn-action btn-test" onClick={() => onTest(agent)} title="Testaa agenttia">
+            ▶ Testaa agenttia
           </button>
         )}
         {onEdit && (
-          <button className="btn-action btn-edit" onClick={() => onEdit(agent)} title="Muokkaa">
-            ✏️
+          <button className="btn-action btn-edit" onClick={() => onEdit(agent)} title="Muokkaa agenttia">
+            ✏️ Muokkaa
           </button>
         )}
         {onCopy && (
@@ -75,8 +84,8 @@ export default function AgentCard({ agent, onEdit, onDelete, onTest, onCopy, onP
           </button>
         )}
         {onDelete && (
-          <button className="btn-action btn-delete" onClick={() => onDelete(agent)} title="Poista">
-            🗑️
+          <button className="btn-action btn-delete" onClick={() => onDelete(agent)} title="Poista agentti">
+            🗑️ Poista agentti
           </button>
         )}
       </div>

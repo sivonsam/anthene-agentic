@@ -87,7 +87,14 @@ async def get_or_create_user(user_id: str, defaults: dict) -> dict:
     try:
         return await _container("users").read_item(user_id, partition_key=user_id)
     except CosmosResourceNotFoundError:
-        item = {"id": user_id, **defaults}
+        # Apply pending invite role if email matches
+        email = defaults.get("email", "")
+        if email:
+            invite = await get_invite_by_email(email)
+            if invite:
+                defaults["role"] = invite["role"]
+                await consume_invite(invite["id"])
+        item = {"id": user_id, "active": True, **defaults}
         return await _container("users").create_item(item)
 
 
@@ -98,6 +105,80 @@ async def update_user(user_id: str, patch: dict) -> dict | None:
         return await _container("users").replace_item(user_id, item)
     except CosmosResourceNotFoundError:
         return None
+
+
+# ── User Admin ────────────────────────────────────────────────────────────────
+
+async def list_all_users() -> list[dict]:
+    query = "SELECT * FROM c ORDER BY c._ts DESC"
+    items = _container("users").query_items(query=query)
+    return [item async for item in items]
+
+
+async def get_user_by_id(user_id: str) -> dict | None:
+    try:
+        return await _container("users").read_item(user_id, partition_key=user_id)
+    except CosmosResourceNotFoundError:
+        return None
+
+
+async def update_user_admin(user_id: str, patch: dict) -> dict | None:
+    try:
+        item = await _container("users").read_item(user_id, partition_key=user_id)
+        item.update(patch)
+        return await _container("users").replace_item(user_id, item)
+    except CosmosResourceNotFoundError:
+        return None
+
+
+async def delete_user_record(user_id: str) -> bool:
+    try:
+        await _container("users").delete_item(user_id, partition_key=user_id)
+        return True
+    except CosmosResourceNotFoundError:
+        return False
+
+
+# ── Invites ───────────────────────────────────────────────────────────────────
+
+async def create_invite(invite: dict) -> dict:
+    return await _container("invites").create_item(invite)
+
+
+async def list_invites() -> list[dict]:
+    query = "SELECT * FROM c WHERE c.consumed = false ORDER BY c._ts DESC"
+    items = _container("invites").query_items(query=query)
+    return [item async for item in items]
+
+
+async def get_invite_by_email(email: str) -> dict | None:
+    query = "SELECT * FROM c WHERE c.email = @email AND c.consumed = false"
+    items = _container("invites").query_items(
+        query=query,
+        parameters=[{"name": "@email", "value": email.lower()}],
+    )
+    try:
+        results = [item async for item in items]
+        return results[0] if results else None
+    except Exception:
+        return None
+
+
+async def consume_invite(invite_id: str) -> None:
+    try:
+        item = await _container("invites").read_item(invite_id, partition_key=invite_id)
+        item["consumed"] = True
+        await _container("invites").replace_item(invite_id, item)
+    except CosmosResourceNotFoundError:
+        pass
+
+
+async def delete_invite(invite_id: str) -> bool:
+    try:
+        await _container("invites").delete_item(invite_id, partition_key=invite_id)
+        return True
+    except CosmosResourceNotFoundError:
+        return False
 
 
 # ── Agent Runs ────────────────────────────────────────────────────────────────

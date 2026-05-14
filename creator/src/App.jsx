@@ -5,9 +5,9 @@ import { createApiClient } from './api'
 import AgentForm from './components/AgentForm'
 import AgentCard from './components/AgentCard'
 import TestChat from './components/TestChat'
+import AgentConsultant, { SUPERAGENT_TOOLS, SUPERAGENT_PROMPT } from './components/AgentConsultant'
+import AdminPanel from './components/AdminPanel'
 import './App.css'
-
-const VIEWS = ['Omat agentit', 'Luo uusi', 'AgentStore']
 
 export default function App() {
   const { instance, accounts } = useMsal()
@@ -16,11 +16,15 @@ export default function App() {
   const [agents, setAgents] = useState([])
   const [storeAgents, setStoreAgents] = useState([])
   const [tools, setTools] = useState([])
+  const [userProfile, setUserProfile] = useState(null)
+  const [operatorPins, setOperatorPins] = useState([]) // agent IDs pinned to operator UI
   const [editingAgent, setEditingAgent] = useState(null)
   const [testingAgent, setTestingAgent] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [formLoading, setFormLoading] = useState(false)
+  // 'consult' | 'manual' — create mode
+  const [createMode, setCreateMode] = useState('consult')
 
   const getToken = useCallback(async () => {
     if (DEV_MODE) return 'dev'
@@ -34,9 +38,15 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const [myAgents, toolList] = await Promise.all([api.listMyAgents(), api.getTools()])
+      const [myAgents, toolList, profile] = await Promise.all([
+        api.listMyAgents(),
+        api.getTools(),
+        api.getMe(),
+      ])
       setAgents(myAgents)
       setTools(toolList)
+      setUserProfile(profile)
+      setOperatorPins(profile?.preferences?.operator_agents || [])
     } catch (e) {
       setError(e.message)
     }
@@ -90,12 +100,28 @@ export default function App() {
     } catch (e) { setError(e.message) }
   }
 
+  const handlePinOperator = async (agent) => {
+    const alreadyPinned = operatorPins.includes(agent.id)
+    const newPins = alreadyPinned
+      ? operatorPins.filter(id => id !== agent.id)
+      : [...operatorPins, agent.id]
+    setOperatorPins(newPins)
+    try {
+      await api.updateMe({ preferences: { operator_agents: newPins } })
+    } catch (e) {
+      setOperatorPins(operatorPins) // revert on error
+      setError(e.message)
+    }
+  }
+
   const handleRunTest = (agent) => (message, onToken, onToolStart, onToolEnd, onDone, onError) => {
     api.runAgentStream(agent.id, message, `test:${agent.id}`,
       onToken, onToolStart, onToolEnd, onDone, onError, getToken)
   }
 
   const user = DEV_MODE ? { name: 'Dev User' } : accounts[0]
+  const isAdmin = DEV_MODE || userProfile?.role === 'admin'
+  const VIEWS = ['Omat agentit', 'Luo agentti', 'AgentStore', ...(isAdmin ? ['Hallinta'] : [])]
 
   return (
     <div className="app">
@@ -109,7 +135,7 @@ export default function App() {
           {VIEWS.map(v => (
             <button key={v} className={`nav-btn ${view === v ? 'active' : ''}`}
               onClick={() => { setEditingAgent(null); setView(v) }}>
-              {v === 'Omat agentit' ? '🤖' : v === 'Luo uusi' ? '✚' : '🏪'} {v}
+              {v === 'Omat agentit' ? '🤖' : v === 'Luo agentti' ? '✚' : v === 'Hallinta' ? '⚙️' : '🏪'} {v}
             </button>
           ))}
         </nav>
@@ -146,7 +172,7 @@ export default function App() {
               <section className="view">
                 <div className="view-toolbar">
                   <h2>Omat agentit <span className="count-badge">{agents.length}</span></h2>
-                  <button className="btn-primary" onClick={() => { setEditingAgent(null); setView('Luo uusi') }}>
+                  <button className="btn-primary" onClick={() => { setEditingAgent(null); setView('Luo agentti') }}>
                     + Luo uusi agentti
                   </button>
                 </div>
@@ -156,15 +182,17 @@ export default function App() {
                       <div className="empty-icon">🤖</div>
                       <h3>Ei vielä agentteja</h3>
                       <p>Luo ensimmäinen agenttisi tai selaa AgentStorea.</p>
-                      <button className="btn-primary" onClick={() => setView('Luo uusi')}>Luo agentti</button>
+                      <button className="btn-primary" onClick={() => setView('Luo agentti')}>Luo uusi agentti</button>
                     </div>
                   ) : (
                     <div className="agents-grid">
                       {agents.map(a => (
                         <AgentCard key={a.id} agent={a}
-                          onEdit={(ag) => { setEditingAgent(ag); setView('Luo uusi') }}
+                          onEdit={(ag) => { setEditingAgent(ag); setView('Luo agentti') }}
                           onDelete={handleDelete}
                           onTest={(ag) => setTestingAgent(testingAgent?.id === ag.id ? null : ag)}
+                          onPinOperator={handlePinOperator}
+                          isPinned={operatorPins.includes(a.id)}
                         />
                       ))}
                     </div>
@@ -177,19 +205,70 @@ export default function App() {
               </section>
             )}
 
-            {view === 'Luo uusi' && (
+            {view === 'Luo agentti' && (
               <section className="view">
                 <div className="view-toolbar">
                   <h2>{editingAgent ? `✏️ Muokkaa: ${editingAgent.name}` : '✚ Luo uusi agentti'}</h2>
-                </div>
-                <div className="create-layout">
-                  <AgentForm tools={tools} initial={editingAgent} onSave={handleSave}
-                    onCancel={() => { setEditingAgent(null); setView('Omat agentit') }}
-                    loading={formLoading} />
-                  {editingAgent && (
-                    <TestChat agent={editingAgent} onRun={handleRunTest(editingAgent)} />
+                  {!editingAgent && (
+                    <div className="create-mode-toggle">
+                      <button
+                        className={`mode-btn ${createMode === 'consult' ? 'active' : ''}`}
+                        onClick={() => setCreateMode('consult')}
+                      >🧠 AI-konsultointi</button>
+                      <button
+                        className={`mode-btn ${createMode === 'manual' ? 'active' : ''}`}
+                        onClick={() => setCreateMode('manual')}
+                      >✏️ Manuaalinen</button>
+                    </div>
                   )}
                 </div>
+
+                {!editingAgent && createMode === 'consult' ? (
+                  <AgentConsultant
+                    getToken={getToken}
+                    onAccept={(agentConfig) => {
+                      setEditingAgent(null)
+                      setCreateMode('manual')
+                      // Pre-fill form from consultant recommendation — name left blank for user to fill
+                      setEditingAgent({ ...agentConfig, id: '__prefill__', name: '' })
+                    }}
+                    onSuperAgent={() => {
+                      setCreateMode('manual')
+                      setEditingAgent({
+                        id: '__prefill__',
+                        name: '',
+                        description: '',
+                        category: 'superagenti',
+                        tools: SUPERAGENT_TOOLS,
+                        model: 'gpt-4o',
+                        system_prompt: '',
+                        graph_type: 'react',
+                        memory_scope: 'conversation',
+                        visibility: 'private',
+                      })
+                    }}
+                  />
+                ) : (
+                  <div className="create-layout">
+                    <AgentForm
+                      tools={tools}
+                      initial={editingAgent?.id === '__prefill__' ? editingAgent : editingAgent}
+                      onSave={async (formData) => {
+                        await handleSave(formData)
+                        setCreateMode('consult')
+                      }}
+                      onCancel={() => {
+                        setEditingAgent(null)
+                        setCreateMode('consult')
+                        setView('Omat agentit')
+                      }}
+                      loading={formLoading}
+                    />
+                    {editingAgent && editingAgent.id !== '__prefill__' && (
+                      <TestChat agent={editingAgent} onRun={handleRunTest(editingAgent)} />
+                    )}
+                  </div>
+                )}
               </section>
             )}
 
@@ -221,11 +300,17 @@ export default function App() {
                 )}
               </section>
             )}
+
+            {view === 'Hallinta' && isAdmin && (
+              <section className="view">
+                <AdminPanel api={api} />
+              </section>
+            )}
           </>
         )}
       </main>
       <footer className="app-footer">
-        Powered by <strong>Vivicta</strong>
+        Powered by <strong>Vivicta</strong> · v1.0 · ssivonen 2026
       </footer>
     </div>
   )

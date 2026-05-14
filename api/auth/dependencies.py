@@ -15,12 +15,20 @@ class CurrentUser:
         self.id: str = claims.get("oid") or claims.get("sub", "anonymous")
         self.email: str = claims.get("emails", [None])[0] if isinstance(claims.get("emails"), list) else claims.get("email", "")
         self.display_name: str = claims.get("name", claims.get("given_name", "User"))
-        self.role: str = claims.get("extension_Role") or claims.get("role", "user")
+        self.role: str = claims.get("extension_Role") or claims.get("role", "editor")
         self.claims: dict = claims
 
     @property
     def is_admin(self) -> bool:
         return self.role == "admin"
+
+    @property
+    def is_editor(self) -> bool:
+        return self.role in ("admin", "editor")
+
+    @property
+    def is_viewer(self) -> bool:
+        return self.role in ("admin", "editor", "viewer")
 
 
 def get_current_user(
@@ -46,4 +54,10 @@ def get_current_user(
 def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if not user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+    return user
+
+
+def require_editor(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    if not user.is_editor:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Editor role required")
     return user

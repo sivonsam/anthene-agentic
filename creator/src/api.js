@@ -38,6 +38,18 @@ export function createApiClient(getToken) {
 
     // User
     getMe: () => call('/api/users/me'),
+    updateMe: (body) => call('/api/users/me', { method: 'PATCH', body: JSON.stringify(body) }),
+    updateMe: (body) => call('/api/users/me', { method: 'PATCH', body: JSON.stringify(body) }),
+
+    // Admin — users
+    listUsers: () => call('/api/admin/users'),
+    updateUser: (id, body) => call(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    deleteUser: (id) => call(`/api/admin/users/${id}`, { method: 'DELETE' }),
+
+    // Admin — invites
+    listInvites: () => call('/api/admin/invites'),
+    createInvite: (body) => call('/api/admin/invites', { method: 'POST', body: JSON.stringify(body) }),
+    deleteInvite: (id) => call(`/api/admin/invites/${id}`, { method: 'DELETE' }),
 
     // Runs
     listRuns: () => call('/api/runs'),

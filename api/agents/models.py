@@ -2,19 +2,37 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime, timezone
 
 
 VALID_TOOLS = [
-    "adsb_area", "adsb_military", "effis_fires", "weather_area",
+    "adsb_area", "adsb_military", "opensky_area", "opensky_aircraft",
+    "fmi_observations", "fmi_warnings", "weather_area",
+    "effis_fires", "firms_fires",
+    "fingrid_status", "fingrid_disturbances",
+    "entsoe_load", "entsoe_outages", "gas_storage",
+    "stuk_radiation", "gdacs_alerts",
     "map_geocode", "web_search", "file_read", "telegram_notify", "calculator",
 ]
 
 VALID_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "phi-3-medium", "mistral-large"]
-VALID_CATEGORIES = ["security", "environmental", "logistics", "intelligence", "custom"]
+
+# Agent categories — describe the MISSION of the agent, not the technology
+VALID_CATEGORIES = [
+    "aluevalvonta",   # 🗺️  AOI-pohjainen aluevalvonta
+    "liikenne",       # 🚦  Ilma-, meri- ja tieliikenne
+    "ymparisto",      # 🌿  Ympäristö, tulipalot, luonnonilmiöt
+    "energia",        # ⚡  Sähköverkko, kaasu, ydinvoima, kriittinen infra
+    "turvallisuus",   # 🛡️  Pelastus, rajavalvonta, yleinen turvallisuus
+    "tiedustelu",     # 🔍  Tilannekuva, analytiikka, raportointi
+    "halytin",        # 🔔  Kynnysarvopohjainen automaattinen hälytin
+    "superagenti",    # 🌐  Kaikki 21 työkalua, kattava tilannekuva
+    "yleinen",        # ⚙️  Yleiskäyttöinen
+]
+
 VALID_VISIBILITIES = ["private", "shared"]
 
 
@@ -25,9 +43,10 @@ class AgentCreate(BaseModel):
     tools: list[str] = Field(default_factory=list)
     model: str = Field("gpt-4o")
     visibility: Literal["private", "shared"] = "private"
-    category: str = Field("custom")
+    category: str = Field("yleinen")
     graph_type: Literal["react", "custom"] = "react"
     memory_scope: Literal["conversation", "user", "global"] = "conversation"
+    aoi: Optional[dict[str, Any]] = None  # GeoJSON Polygon geometry
 
 
 class AgentUpdate(BaseModel):
@@ -38,6 +57,7 @@ class AgentUpdate(BaseModel):
     model: Optional[str] = None
     visibility: Optional[Literal["private", "shared"]] = None
     category: Optional[str] = None
+    aoi: Optional[dict[str, Any]] = None
 
 
 class AgentResponse(BaseModel):
@@ -52,6 +72,7 @@ class AgentResponse(BaseModel):
     category: str
     graph_type: str
     memory_scope: str
+    aoi: Optional[dict[str, Any]] = None
     created_at: str
     updated_at: str
 
@@ -67,9 +88,10 @@ def agent_doc(owner_id: str, data: AgentCreate) -> dict:
         "tools": [t for t in data.tools if t in VALID_TOOLS],
         "model": data.model if data.model in VALID_MODELS else "gpt-4o",
         "visibility": data.visibility,
-        "category": data.category if data.category in VALID_CATEGORIES else "custom",
+        "category": data.category if data.category in VALID_CATEGORIES else "yleinen",
         "graph_type": data.graph_type,
         "memory_scope": data.memory_scope,
+        "aoi": data.aoi,
         "created_at": now,
         "updated_at": now,
     }
