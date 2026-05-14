@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { loginRequest, DEV_MODE, API_BASE } from './config'
 import { createApiClient } from './api'
+import { initSSO, isTokenValid, getTokenExpiry, clearSession } from './sso'
 import AgentForm from './components/AgentForm'
 import AgentCard from './components/AgentCard'
 import TestChat from './components/TestChat'
@@ -26,7 +27,10 @@ export default function App() {
   const [formLoading, setFormLoading] = useState(false)
   // 'consult' | 'manual' — create mode
   const [createMode, setCreateMode] = useState('consult')
-  const [devToken, setDevToken] = useState(() => localStorage.getItem('anthene_token'))
+  const [devToken, setDevToken] = useState(() => {
+    const token = initSSO()
+    return isTokenValid(token) ? token : null
+  })
   const [devUser, setDevUser] = useState(() => { try { return JSON.parse(localStorage.getItem('anthene_user')) } catch { return null } })
 
   const getToken = useCallback(async () => {
@@ -65,6 +69,24 @@ export default function App() {
 
   const isLoggedIn = (DEV_MODE && devToken != null) || isAuthenticated
 
+  // Auto-logout when token expires
+  useEffect(() => {
+    if (!devToken) return
+    const expiry = getTokenExpiry(devToken)
+    if (!expiry) return
+    const msUntilExpiry = expiry.getTime() - Date.now()
+    if (msUntilExpiry <= 0) {
+      clearSession()
+      setDevToken(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      clearSession()
+      setDevToken(null)
+    }, msUntilExpiry)
+    return () => clearTimeout(timer)
+  }, [devToken])
+
   useEffect(() => { if (isLoggedIn) loadData() }, [isLoggedIn])
   useEffect(() => { if (view === 'AgentStore' && isLoggedIn) loadStore() }, [view, isLoggedIn])
 
@@ -75,7 +97,8 @@ export default function App() {
     setFormLoading(true)
     setError(null)
     try {
-      if (editingAgent) {
+      const isNewAgent = !editingAgent || editingAgent.id === '__prefill__' || !editingAgent.id
+      if (!isNewAgent) {
         try {
           await api.updateAgent(editingAgent.id, formData)
         } catch (updateErr) {
@@ -162,8 +185,7 @@ export default function App() {
               {!DEV_MODE && <button className="btn-logout" onClick={handleLogout}>Kirjaudu ulos</button>}
               {DEV_MODE && (
                 <button className="btn-logout" onClick={() => {
-                  localStorage.removeItem('anthene_token')
-                  localStorage.removeItem('anthene_user')
+                  clearSession()
                   setDevToken(null)
                   setDevUser(null)
                 }}>Kirjaudu ulos</button>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { loginRequest, DEV_MODE } from './config'
 import { createApiClient } from './api'
+import { initSSO, isTokenValid, getTokenExpiry, clearSession } from './sso'
 import AgentCard from './components/AgentCard'
 import TestChat from './components/TestChat'
 import FlightMapView from './components/FlightMapView'
@@ -46,8 +47,29 @@ function statusLabel(status) {
 
 // ── Root App — decides DEV vs MSAL mode ─────────────────────────────────────
 export default function App() {
-  const [devToken, setDevToken] = useState(() => localStorage.getItem('anthene_token'))
+  const [devToken, setDevToken] = useState(() => {
+    const token = initSSO()
+    return isTokenValid(token) ? token : null
+  })
   const [devUser, setDevUser] = useState(() => { try { return JSON.parse(localStorage.getItem('anthene_user')) } catch { return null } })
+
+  // Auto-logout when token expires
+  useEffect(() => {
+    if (!devToken) return
+    const expiry = getTokenExpiry(devToken)
+    if (!expiry) return
+    const msUntilExpiry = expiry.getTime() - Date.now()
+    if (msUntilExpiry <= 0) {
+      clearSession()
+      setDevToken(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      clearSession()
+      setDevToken(null)
+    }, msUntilExpiry)
+    return () => clearTimeout(timer)
+  }, [devToken])
 
   if (DEV_MODE) {
     if (!devToken) {
@@ -56,8 +78,7 @@ export default function App() {
     const user = devUser || { name: 'Dev User', id: 'dev-user-1', email: 'dev@anthene.ai' }
     const getToken = () => Promise.resolve(devToken)
     const handleLogout = () => {
-      localStorage.removeItem('anthene_token')
-      localStorage.removeItem('anthene_user')
+      clearSession()
       setDevToken(null)
       setDevUser(null)
     }

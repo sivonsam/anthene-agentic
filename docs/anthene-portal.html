@@ -218,6 +218,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
 .footer{text-align:center;padding:1.5rem;font-size:.78rem;color:#334155;margin-top:2rem;border-top:1px solid #1e293b}
 .footer strong{color:#7c6fcd}
 
+/* Login status bar */
+.login-ok{background:#10b98115;border:1px solid #10b98133;border-radius:10px;padding:.7rem 1rem;display:flex;align-items:center;gap:.75rem;font-size:.85rem;color:#34d399;flex-wrap:wrap}
+.btn-sm{background:#1e293b;border:1px solid #334155;border-radius:6px;color:#94a3b8;padding:.25rem .7rem;font-size:.78rem;cursor:pointer}
+.btn-sm:hover{border-color:#7c6fcd55;color:#e2e8f0}
+.portal-login-card{background:#0f1523;border:1px solid #1e293b;border-radius:12px;padding:1rem 1.25rem}
+.portal-login-card b{font-size:.88rem;color:#e2e8f0}
+
 /* Responsive */
 @media(max-width:768px){
   .page{padding:1.25rem 1rem}
@@ -260,6 +267,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
   </div>
 
   <div class="page">
+
+    <!-- SSO Login bar -->
+    <div id="portal-login" style="max-width:600px;margin:0 auto 1.5rem"></div>
 
     <!-- Hero -->
     <div class="hero">
@@ -784,6 +794,81 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
 
 <script>
 const HASH = '401315c8810bda5938114bf5bf9e41250dd73e27e4db4d7337f4e4aae2004db1'
+const API = 'https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io'
+
+let ssoToken = localStorage.getItem('anthene_token')
+
+function withSSO(url) {
+  if (!ssoToken) return url
+  const sep = url.includes('?') ? '&' : '?'
+  return url + sep + 'sso_token=' + encodeURIComponent(ssoToken)
+}
+
+function updateLinks() {
+  document.querySelectorAll('a[href*="azurestaticapps.net"]').forEach(a => {
+    const base = a.href.split('?')[0].split('#')[0]
+    if (ssoToken) {
+      a.href = base + '?sso_token=' + encodeURIComponent(ssoToken)
+    } else {
+      a.href = base
+    }
+  })
+}
+
+function showLoginIfNeeded() {
+  const loginSection = document.getElementById('portal-login')
+  if (!loginSection) return
+  if (ssoToken) {
+    try {
+      const payload = JSON.parse(atob(ssoToken.split('.')[1]))
+      if (payload.exp * 1000 > Date.now()) {
+        loginSection.innerHTML = `<div class="login-ok">✓ Kirjautunut: <b>${payload.name}</b> · Sessio voimassa ${new Date(payload.exp*1000).toLocaleTimeString('fi')} asti &nbsp;<button onclick="portalLogout()" class="btn-sm">Kirjaudu ulos</button></div>`
+        updateLinks()
+        return
+      }
+    } catch {}
+    ssoToken = null
+    localStorage.removeItem('anthene_token')
+  }
+  loginSection.innerHTML = `
+    <div class="portal-login-card">
+      <b>Kirjaudu Anthene-järjestelmään</b>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="pl-user" placeholder="Käyttäjätunnus" style="flex:1;background:#0f172a;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;padding:6px 10px;font-size:.85rem">
+        <input id="pl-pass" type="password" placeholder="Salasana" style="flex:1;background:#0f172a;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;padding:6px 10px;font-size:.85rem" onkeydown="if(event.key==='Enter')portalLogin()">
+        <button onclick="portalLogin()" style="background:#7c6fcd;border:none;border-radius:8px;color:#fff;padding:6px 16px;font-weight:700;cursor:pointer;font-size:.85rem">Kirjaudu</button>
+      </div>
+      <div id="pl-err" style="color:#ef4444;font-size:.8rem;margin-top:6px;display:none"></div>
+      <div style="font-size:.75rem;color:#475569;margin-top:6px">Demo: admin / Jallukola &nbsp;·&nbsp; operaattori / Anthene2025</div>
+    </div>`
+}
+
+async function portalLogin() {
+  const u = document.getElementById('pl-user')?.value
+  const p = document.getElementById('pl-pass')?.value
+  if (!u || !p) return
+  try {
+    const r = await fetch(API + '/api/auth/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username: u, password: p})
+    })
+    if (!r.ok) throw new Error((await r.json()).detail || 'Virhe')
+    const data = await r.json()
+    ssoToken = data.token
+    localStorage.setItem('anthene_token', ssoToken)
+    showLoginIfNeeded()
+  } catch(e) {
+    const err = document.getElementById('pl-err')
+    if (err) { err.textContent = e.message; err.style.display = 'block' }
+  }
+}
+
+function portalLogout() {
+  ssoToken = null
+  localStorage.removeItem('anthene_token')
+  showLoginIfNeeded()
+  updateLinks()
+}
 
 async function sha256(msg) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg))
@@ -797,6 +882,7 @@ async function checkPw() {
     sessionStorage.setItem('anthene_portal_auth','1')
     document.getElementById('lock').style.display = 'none'
     document.getElementById('portal').style.display = 'block'
+    showLoginIfNeeded()
   } else {
     document.getElementById('pw-err').style.display = 'block'
     document.getElementById('pw').value = ''
@@ -809,6 +895,7 @@ document.getElementById('pw').addEventListener('keydown', e => { if(e.key==='Ent
 if (sessionStorage.getItem('anthene_portal_auth') === '1') {
   document.getElementById('lock').style.display = 'none'
   document.getElementById('portal').style.display = 'block'
+  showLoginIfNeeded()
 }
 </script>
 </body>

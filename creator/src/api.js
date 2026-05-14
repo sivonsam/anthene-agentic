@@ -54,6 +54,10 @@ export function createApiClient(getToken) {
     createInvite: (body) => call('/api/admin/invites', { method: 'POST', body: JSON.stringify(body) }),
     deleteInvite: (id) => call(`/api/admin/invites/${id}`, { method: 'DELETE' }),
 
+    // Session config
+    getSessionConfig: () => call('/api/auth/session-config'),
+    updateSessionConfig: (body) => call('/api/auth/session-config', { method: 'PUT', body: JSON.stringify(body) }),
+
     // Runs
     listRuns: () => call('/api/runs'),
 

@@ -278,6 +278,109 @@ function InvitesTab({ api }) {
   )
 }
 
+function SessionTab({ api }) {
+  const [config, setConfig] = useState({ session_hours: 8, max_idle_minutes: 60 })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    api.getSessionConfig().then(data => {
+      if (data) setConfig(data)
+    }).catch(e => setError(e.message)).finally(() => setLoading(false))
+  }, [api])
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      const result = await api.updateSessionConfig(config)
+      setConfig(result)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (e) {
+      setError(e.message)
+    }
+    setSaving(false)
+  }
+
+  const currentToken = localStorage.getItem('anthene_token')
+  let tokenExpiry = null
+  try {
+    const payload = JSON.parse(atob(currentToken.split('.')[1]))
+    tokenExpiry = new Date(payload.exp * 1000).toLocaleString('fi-FI')
+  } catch {}
+
+  return (
+    <div className="admin-tab">
+      {error && <div className="admin-error">⚠️ {error} <button onClick={() => setError(null)}>✕</button></div>}
+
+      {tokenExpiry && (
+        <div className="admin-stats">
+          <div className="stat-card">
+            <span className="stat-value" style={{ fontSize: '0.9rem' }}>{tokenExpiry}</span>
+            <span className="stat-label">Oma sessio vanhentuu</span>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="admin-loading">Ladataan asetuksia…</div>
+      ) : (
+        <div className="invite-form-card" style={{ maxWidth: 480 }}>
+          <h3>⏱️ Sessioasetukset</h3>
+          <p>Määritä kirjautumissession kesto ja toimettomana oloajan enimmäisaika.</p>
+
+          <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '.82rem', color: '#94a3b8', marginBottom: '.4rem' }}>
+                Session kesto (tuntia): <strong style={{ color: '#e2e8f0' }}>{config.session_hours} h</strong>
+              </label>
+              <input
+                type="range"
+                min={1} max={168} step={1}
+                value={config.session_hours}
+                onChange={e => setConfig(c => ({ ...c, session_hours: Number(e.target.value) }))}
+                style={{ width: '100%', accentColor: '#7c6fcd' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.72rem', color: '#475569' }}>
+                <span>1 h</span><span>1 viikko</span>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '.82rem', color: '#94a3b8', marginBottom: '.4rem' }}>
+                Toimettomana oloajan enimmäisaika (minuuttia): <strong style={{ color: '#e2e8f0' }}>{config.max_idle_minutes} min</strong>
+              </label>
+              <input
+                type="range"
+                min={5} max={480} step={5}
+                value={config.max_idle_minutes}
+                onChange={e => setConfig(c => ({ ...c, max_idle_minutes: Number(e.target.value) }))}
+                style={{ width: '100%', accentColor: '#7c6fcd' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.72rem', color: '#475569' }}>
+                <span>5 min</span><span>8 h</span>
+              </div>
+            </div>
+
+            <button
+              className="btn-primary"
+              onClick={handleSave}
+              disabled={saving}
+              style={{ alignSelf: 'flex-start' }}
+            >
+              {saving ? 'Tallennetaan…' : saved ? '✅ Tallennettu!' : '💾 Tallenna asetukset'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminPanel({ api }) {
   const [tab, setTab] = useState('users')
 
@@ -297,10 +400,15 @@ export default function AdminPanel({ api }) {
           className={`admin-tab-btn ${tab === 'invites' ? 'active' : ''}`}
           onClick={() => setTab('invites')}
         >✉️ Kutsut</button>
+        <button
+          className={`admin-tab-btn ${tab === 'session' ? 'active' : ''}`}
+          onClick={() => setTab('session')}
+        >⏱️ Sessio</button>
       </div>
 
       {tab === 'users' && <UsersTab api={api} />}
       {tab === 'invites' && <InvitesTab api={api} />}
+      {tab === 'session' && <SessionTab api={api} />}
     </div>
   )
 }

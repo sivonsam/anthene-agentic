@@ -15,7 +15,7 @@ async def weather_area(lat: float, lon: float) -> dict:
         "current": [
             "temperature_2m", "relative_humidity_2m", "wind_speed_10m",
             "wind_direction_10m", "weather_code", "cloud_cover",
-            "precipitation", "surface_pressure", "visibility",
+            "precipitation", "surface_pressure",
         ],
         "wind_speed_unit": "kn",
         "timezone": "auto",
@@ -37,7 +37,7 @@ async def weather_area(lat: float, lon: float) -> dict:
         "cloud_cover_pct": current.get("cloud_cover"),
         "precipitation_mm": current.get("precipitation"),
         "pressure_hpa": current.get("surface_pressure"),
-        "visibility_m": current.get("visibility"),
+        "visibility_m": None,  # not available in current endpoint
         "weather_code": current.get("weather_code"),
         "time": current.get("time"),
     }

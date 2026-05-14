@@ -181,6 +181,26 @@ async def delete_invite(invite_id: str) -> bool:
         return False
 
 
+# ── Config ────────────────────────────────────────────────────────────────────
+
+async def get_config(config_id: str) -> dict | None:
+    """Get a configuration document by ID (stored in agents container)."""
+    try:
+        doc_id = f"__config_{config_id}"
+        item = await _container("agents").read_item(doc_id, partition_key=doc_id)
+        return {k: v for k, v in item.items() if not k.startswith('_') and k != 'id'}
+    except Exception:
+        return None
+
+
+async def upsert_config(config_id: str, data: dict) -> dict:
+    """Upsert a configuration document in the agents container."""
+    doc_id = f"__config_{config_id}"
+    doc = {"id": doc_id, **{k: v for k, v in data.items() if k != 'id'}}
+    await _container("agents").upsert_item(doc)
+    return doc
+
+
 # ── Agent Runs ────────────────────────────────────────────────────────────────
 
 async def create_run(run: dict) -> dict:

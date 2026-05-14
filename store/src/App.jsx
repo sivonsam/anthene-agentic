@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { loginRequest, DEV_MODE } from './config'
 import { createApiClient } from './api'
+import { initSSO, isTokenValid, getTokenExpiry, clearSession } from './sso'
 import AgentCard from './components/AgentCard'
 import AgentPreview from './components/AgentPreview'
 import AdminTable from './components/AdminTable'
@@ -54,10 +55,33 @@ export default function App() {
   const [sort, setSort] = useState('newest')
   const [previewAgent, setPreviewAgent] = useState(null)
   const [toasts, setToasts] = useState([])
-  const [devToken, setDevToken] = useState(() => localStorage.getItem('anthene_token'))
+  const [devToken, setDevToken] = useState(() => {
+    const token = initSSO()
+    return isTokenValid(token) ? token : null
+  })
   const [devUser, setDevUser] = useState(() => { try { return JSON.parse(localStorage.getItem('anthene_user')) } catch { return null } })
 
   const isLoggedIn = (DEV_MODE && devToken != null) || isAuthenticated
+
+  // Auto-logout when token expires
+  useEffect(() => {
+    if (!devToken) return
+    const expiry = getTokenExpiry(devToken)
+    if (!expiry) return
+    const msUntilExpiry = expiry.getTime() - Date.now()
+    if (msUntilExpiry <= 0) {
+      clearSession()
+      setDevToken(null)
+      setUser(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      clearSession()
+      setDevToken(null)
+      setUser(null)
+    }, msUntilExpiry)
+    return () => clearTimeout(timer)
+  }, [devToken])
 
   const getToken = useCallback(async () => {
     if (DEV_MODE) return devToken || localStorage.getItem('anthene_token') || 'dev'
@@ -262,8 +286,7 @@ export default function App() {
               {!DEV_MODE && <button className="btn-logout" onClick={handleLogout}>Kirjaudu ulos</button>}
               {DEV_MODE && (
                 <button className="btn-logout" onClick={() => {
-                  localStorage.removeItem('anthene_token')
-                  localStorage.removeItem('anthene_user')
+                  clearSession()
                   setDevToken(null)
                   setDevUser(null)
                   setUser(null)
