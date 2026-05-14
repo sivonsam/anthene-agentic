@@ -26,19 +26,22 @@ def _iso_now(offset_hours: int = 0) -> str:
 
 async def fmi_weather_observations(lat: float, lon: float, hours_back: int = 1) -> dict:
     """Get latest weather observations near a location from FMI open data."""
+    import math
     hours_back = min(max(hours_back, 1), 24)
+    # Use a bbox of ~1.5 degree around the point — latlon+maxlocations returns 0 results
+    delta = 1.5
     params = {
         "service": "WFS",
         "version": "2.0.0",
         "request": "getFeature",
         "storedquery_id": "fmi::observations::weather::simple",
-        "latlon": f"{lat},{lon}",
-        "maxlocations": "1",
+        "bbox": f"{lon - delta},{lat - delta},{lon + delta},{lat + delta}",
+        "maxlocations": "5",
         "starttime": _iso_now(-hours_back),
         "endtime": _iso_now(),
     }
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(FMI_WFS, params=params)
             resp.raise_for_status()
             root = ET.fromstring(resp.content)
@@ -58,7 +61,7 @@ async def fmi_weather_observations(lat: float, lon: float, hours_back: int = 1) 
             if obs:
                 observations.append(obs)
 
-        # Group by parameter
+        # Group by parameter — keep latest value per parameter
         grouped: dict[str, str] = {}
         for o in observations:
             grouped[o.get("parameter", "?")] = o.get("value", "NaN")

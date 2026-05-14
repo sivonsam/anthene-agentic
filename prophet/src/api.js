@@ -48,7 +48,7 @@ export function createApiClient(getToken) {
     listRuns: () => call('/api/runs'),
 
     // SSE streaming run
-    runAgentStream: (agentId, message, sessionId, onToken, onToolStart, onToolEnd, onDone, onError, getTokenFn) => {
+    runAgentStream: (agentId, message, sessionId, aoiOverride, onToken, onToolStart, onToolEnd, onDone, onError, getTokenFn) => {
       const runStream = async () => {
         let token = DEV_MODE ? DEV_TOKEN : await getTokenFn()
         const res = await fetch(`${API_BASE}/api/run/${agentId}`, {
@@ -57,7 +57,7 @@ export function createApiClient(getToken) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ message, session_id: sessionId }),
+          body: JSON.stringify({ message, session_id: sessionId, ...(aoiOverride ? { aoi_override: aoiOverride } : {}) }),
         })
         if (!res.ok) {
           onError?.(`HTTP ${res.status}`)

@@ -231,11 +231,12 @@ function Prophet({ user, getToken, onLogout }) {
 
   // ── onRun factory for TestChat ──────────────────────────────────────────────
   const makeOnRun = (agent, sessionId) =>
-    (message, onToken, onToolStart, onToolEnd, onDone, onError) => {
+    (message, aoiOverride, onToken, onToolStart, onToolEnd, onDone, onError) => {
       api.runAgentStream(
         agent.id,
         message,
         sessionId,
+        aoiOverride,
         onToken,
         onToolStart,
         onToolEnd,

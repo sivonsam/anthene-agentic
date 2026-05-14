@@ -19,6 +19,7 @@ router = APIRouter(tags=["runtime"])
 class RunRequest(BaseModel):
     message: str
     session_id: str | None = None
+    aoi_override: dict | None = None  # GeoJSON Polygon geometry, overrides agent's stored AOI
 
 
 @router.post("/run/{agent_id}")
@@ -38,6 +39,10 @@ async def run_agent(
 
     session_id = body.session_id or f"{user.id}:{agent_id}:default"
     run_id = str(uuid.uuid4())
+
+    # Apply per-message AOI override (from chat map drawing)
+    if body.aoi_override:
+        agent_def = {**agent_def, "aoi": body.aoi_override}
 
     # Log run start
     run_doc = {

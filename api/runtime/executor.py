@@ -87,12 +87,34 @@ def _build_lc_tool(tool_meta: dict, aoi_bbox: dict | None = None) -> StructuredT
 
     async def _call(**kwargs) -> str:
         merged = {**_geo_defaults, **{k: v for k, v in kwargs.items() if v is not None}}
+        _HTTP_MEANINGS = {
+            400: "Virheellinen pyyntö — tarkista parametrit",
+            401: "Ei autentikoitu — API-avain puuttuu tai on virheellinen",
+            403: "Ei käyttöoikeutta — API-avain ei tue tätä endpointia tai suunnitelma on liian suppea",
+            404: "Endpointtia ei löydy — työkalu tai resurssi ei ole saatavilla",
+            408: "Pyyntö aikakatkaistiin — palvelin ei vastannut ajoissa",
+            429: "Liian monta pyyntöä — API-kutsujen raja ylitetty, odota hetki",
+            500: "Palvelinvirhe — työkalu kaatui odottamattomasti",
+            502: "Yhdyskäytävävirhe — välityspalvelin sai virheellisen vastauksen",
+            503: "Palvelu ei käytettävissä — palvelin tilapäisesti poissa käytöstä",
+            504: "Yhdyskäytävän aikakatkaisu — palvelu ei vastannut ajoissa",
+        }
         async with httpx.AsyncClient(timeout=30, follow_redirects=False, verify=False) as client:
             resp = await client.post(
                 f"{TOOLHUB_URL}/tools/call/{tool_id}",
                 json={"args": merged},
             )
-            resp.raise_for_status()
+            if not resp.is_success:
+                code = resp.status_code
+                meaning = _HTTP_MEANINGS.get(code, "Tuntematon virhe")
+                return json.dumps({
+                    "error": True,
+                    "status_code": code,
+                    "status_text": resp.reason_phrase,
+                    "meaning": meaning,
+                    "tool": tool_id,
+                    "message": f"HTTP {code} {resp.reason_phrase} — {meaning}",
+                }, ensure_ascii=False)
             data = resp.json()
         return json.dumps(data.get("result", {}), ensure_ascii=False)
 
@@ -139,11 +161,35 @@ async def run_agent_stream(
             coords = aoi["coordinates"][0]
             lats = [c[1] for c in coords]
             lons = [c[0] for c in coords]
+            center_lat = (min(lats) + max(lats)) / 2
+            center_lon = (min(lons) + max(lons)) / 2
+            # Compute radius from center to farthest corner (in km and nm)
+            import math
+            def _haversine_km(lat1, lon1, lat2, lon2):
+                R = 6371.0
+                dlat = math.radians(lat2 - lat1)
+                dlon = math.radians(lon2 - lon1)
+                a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+                return R * 2 * math.asin(math.sqrt(a))
+            max_radius_km = max(
+                _haversine_km(center_lat, center_lon, lat, lon)
+                for lat, lon in zip(lats, lons)
+            )
+            max_radius_km = max(max_radius_km, 50.0)  # minimum 50km
+            max_radius_nm = max_radius_km / 1.852
             aoi_bbox = {
-                "lat": (min(lats) + max(lats)) / 2,
-                "lon": (min(lons) + max(lons)) / 2,
+                "lat": center_lat,
+                "lon": center_lon,
+                # bbox variants for different tools
                 "lat_min": min(lats), "lat_max": max(lats),
                 "lon_min": min(lons), "lon_max": max(lons),
+                # Digitraffic uses lamin/lamax/lomin/lomax
+                "lamin": min(lats), "lamax": max(lats),
+                "lomin": min(lons), "lomax": max(lons),
+                # radius variants for different tools
+                "radius_km": round(max_radius_km, 1),
+                "radius_nm": round(max_radius_nm, 1),
+                "dist_nm": round(max_radius_nm, 1),
             }
 
         lc_tools = [_build_lc_tool(t, aoi_bbox) for t in selected_tools]
@@ -193,11 +239,14 @@ async def run_agent_stream(
 
         if aoi_bbox:
             system_prompt += (
-                f"\n\nValvonta-alue (AOI) on määritetty. Käytä aina tätä aluetta geotyökaluissa ellei käyttäjä erikseen pyydä muuta:\n"
+                f"\n\nValvonta-alue (AOI) on määritetty. Käytä AINA seuraavia arvoja geotyökaluissa ellei käyttäjä erikseen pyydä muuta:\n"
                 f"- Keskipiste: lat={aoi_bbox['lat']:.4f}, lon={aoi_bbox['lon']:.4f}\n"
-                f"- Kattavuus: lat {aoi_bbox['lat_min']:.4f}–{aoi_bbox['lat_max']:.4f}, "
-                f"lon {aoi_bbox['lon_min']:.4f}–{aoi_bbox['lon_max']:.4f}\n"
-                f"Analysoi tapahtumat tällä alueella."
+                f"- Säde: radius_nm={aoi_bbox['radius_nm']:.1f} meripeninkulma, radius_km={aoi_bbox['radius_km']:.1f} km, dist_nm={aoi_bbox['dist_nm']:.1f}\n"
+                f"- Bounding box: lat_min={aoi_bbox['lat_min']:.4f} lat_max={aoi_bbox['lat_max']:.4f} "
+                f"lon_min={aoi_bbox['lon_min']:.4f} lon_max={aoi_bbox['lon_max']:.4f}\n"
+                f"- Digitraffic/bbox-muoto: lamin={aoi_bbox['lamin']:.4f} lamax={aoi_bbox['lamax']:.4f} "
+                f"lomin={aoi_bbox['lomin']:.4f} lomax={aoi_bbox['lomax']:.4f}\n"
+                f"Analysoi tapahtumat tällä alueella. Käytä mieluiten vessels_bbox aluksille (bbox-haulla) ja adsb_area/opensky_area lentokoneille (säde-haulla)."
             )
         graph = create_react_agent(llm, lc_tools)
 
@@ -225,7 +274,20 @@ async def run_agent_stream(
             elif kind == "on_tool_end":
                 tool_name = event.get("name", "unknown")
                 tool_output = event.get("data", {}).get("output", "")
-                yield _sse({"type": "tool_end", "tool": tool_name, "output": str(tool_output)[:500]})
+                # For map tools, send full output (needed for visualization).
+                # For other tools, cap at 8000 chars to keep SSE manageable.
+                MAP_TOOL_IDS = {
+                    'adsb_area','adsb_military','aircraft_trail','aircraft_detail',
+                    'opensky_area','opensky_aircraft',
+                    'vessels_area','vessels_bbox','vessel_detail',
+                    'effis_fires','firms_fires','fmi_lightning',
+                    'stuk_radiation','gdacs_alerts','map_geocode',
+                    'detect_clusters','correlate_events',
+                    'weather_area','fmi_observations','fmi_warnings',
+                }
+                raw_output = str(tool_output)
+                limit = len(raw_output) if tool_name in MAP_TOOL_IDS else 8000
+                yield _sse({"type": "tool_end", "tool": tool_name, "output": raw_output[:limit]})
 
         # Update session memory
         ai_content = "".join(ai_response_parts)

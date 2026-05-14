@@ -6,128 +6,197 @@ const STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
 function parseToolOutput(tool, inputStr, outputStr) {
   let input = {}, output = {}
-  try { input = typeof inputStr === 'string' ? JSON.parse(inputStr) : inputStr } catch {}
-  try { output = typeof outputStr === 'string' ? JSON.parse(outputStr) : outputStr } catch {}
+  try { input = typeof inputStr === 'string' ? JSON.parse(inputStr) : (inputStr || {}) } catch {}
+  try { output = typeof outputStr === 'string' ? JSON.parse(outputStr) : (outputStr || {}) } catch {}
 
   const features = []
 
-  if (tool === 'adsb_area' || tool === 'adsb_military') {
-    const aircraft = output.aircraft || []
+  // ✈️ Aircraft — ADS-B Exchange (all area/list tools)
+  if (['adsb_area','adsb_military','adsb_emergency',
+       'adsb_by_registration','adsb_by_callsign','adsb_by_squawk','adsb_by_type'].includes(tool)) {
+    const aircraft = output.aircraft || (output.hex ? [output] : [])
     aircraft.forEach(a => {
       if (!a.lat || !a.lon) return
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
-        properties: {
-          color: a.emergency ? '#ff3333' : a.military ? '#ff9900' : '#00cc88',
-          label: a.callsign || a.hex || '?',
-          popup: `✈️ ${a.callsign || a.hex}\n${a.type || ''} ${a.registration || ''}\n⬆ ${a.alt_baro || '?'} ft · 💨 ${a.gs || '?'} kt`,
-          layer: 'adsb'
-        }
-      })
+      const isEmerg = a.emergency || a.squawk_alert
+      const isMil = a.military
+      const color = isEmerg ? '#ff3333' : isMil ? '#ff9900' : '#00cc88'
+      const emergBadge = isEmerg ? `🚨 ${a.emergency || a.squawk_alert}\n` : ''
+      const milBadge = isMil ? '🪖 ' : ''
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[a.lon,a.lat] }, properties:{
+        color,
+        label: a.callsign || a.registration || a.hex || '?',
+        popup: `${milBadge}✈️ ${a.callsign||a.hex}\n${emergBadge}${a.type||''} ${a.registration||''}\n${a.operator ? a.operator+'\n' : ''}⬆ ${a.altitude_ft||'?'} ft · �� ${a.ground_speed_kt||'?'} kt`,
+        layer:'adsb'
+      }})
     })
   }
 
-  if (tool === 'weather_area' || tool === 'fmi_observations') {
-    const lat = output.lat ?? input.lat
-    const lon = output.lon ?? input.lon
-    if (lat && lon) {
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [lon, lat] },
-        properties: {
-          color: '#60a5fa',
-          label: `${output.temperature_c ?? output.temperature ?? '?'}°C`,
-          popup: `🌡️ ${output.temperature_c ?? output.temperature ?? '?'}°C\n💨 ${output.wind_speed_kt ?? output.wind_speed ?? '?'} kt\n☁️ ${output.cloud_cover_pct ?? output.cloud_cover ?? '?'}%\n💧 ${output.humidity_pct ?? output.humidity ?? '?'}%`,
-          layer: 'weather'
-        }
-      })
-    }
+  // ✈️ Aircraft — OpenSky Network
+  if (['opensky_area','opensky_aircraft'].includes(tool)) {
+    const aircraft = output.aircraft || (output.hex ? [output] : [])
+    aircraft.forEach(a => {
+      const lat = a.lat ?? a.latitude
+      const lon = a.lon ?? a.longitude
+      if (!lat || !lon) return
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[lon,lat] }, properties:{
+        color: '#00cc88',
+        label: a.callsign || a.hex || '?',
+        popup: `✈️ ${a.callsign||a.hex||'?'}\n${a.country||''}\n⬆ ${a.altitude_ft||'?'} ft · 💨 ${a.ground_speed_kt||'?'} kt`,
+        layer:'adsb'
+      }})
+    })
   }
 
-  if (tool === 'effis_fires' || tool === 'effis_risk') {
+  // ✈️ Aircraft trail — ADS-B Exchange
+  if (tool === 'aircraft_trail') {
+    const trail = output.trail || []
+    trail.forEach((p, i) => {
+      if (!p.lat || !p.lon) return
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[p.lon,p.lat] }, properties:{
+        color: i === trail.length-1 ? '#00cc88' : '#334155',
+        label: i === trail.length-1 ? (output.callsign||output.hex||'✈️') : '',
+        popup: `✈️ ${output.callsign||output.hex||'?'}\n⬆ ${p.altitude_ft||'?'} ft · 💨 ${p.ground_speed_kt||'?'} kt`,
+        layer:'adsb'
+      }})
+    })
+  }
+
+  // ✈️ Aircraft detail
+  if (tool === 'aircraft_detail') {
+    const lat = output.lat, lon = output.lon
+    if (lat && lon) features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[lon,lat] }, properties:{
+      color:'#00cc88', label: output.callsign||output.hex||'?',
+      popup:`✈️ ${output.callsign||output.hex}\n${output.type||''} ${output.registration||''}\n⬆ ${output.altitude_ft||'?'} ft`,
+      layer:'adsb'
+    }})
+  }
+
+  // 🌡️ Weather
+  if (['weather_area','fmi_observations'].includes(tool)) {
+    const lat = output.lat ?? input.lat, lon = output.lon ?? input.lon
+    if (lat && lon) features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[lon,lat] }, properties:{
+      color:'#60a5fa',
+      label:`${output.temperature_c??output.temperature??'?'}°C`,
+      popup:`🌡️ ${output.temperature_c??output.temperature??'?'}°C\n💨 ${output.wind_speed_kt??output.wind_speed??'?'} kt\n☁️ ${output.cloud_cover_pct??output.cloud_cover??'?'}%`,
+      layer:'weather'
+    }})
+  }
+
+  // ⚡ Lightning
+  if (tool === 'fmi_lightning') {
+    const strikes = output.strikes || []
+    strikes.slice(0,100).forEach(s => {
+      if (!s.lat || !s.lon) return
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[s.lon,s.lat] }, properties:{
+        color:'#fbbf24', label:'⚡',
+        popup:`⚡ Salamahavainto`,
+        layer:'lightning'
+      }})
+    })
+  }
+
+  // 🔥 Fires — EFFIS
+  if (tool === 'effis_fires') {
     const fires = output.fires || output.hotspots || []
     fires.forEach(f => {
       if (!f.lat || !f.lon) return
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
-        properties: {
-          color: '#f97316',
-          label: '🔥',
-          popup: `🔥 Tulipalo\nPinta-ala: ${f.area_ha || '?'} ha\nAktiivisuus: ${f.activity || '?'}`,
-          layer: 'fires'
-        }
-      })
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[f.lon,f.lat] }, properties:{
+        color:'#f97316', label:'🔥',
+        popup:`🔥 Metsäpalo\nPinta-ala: ${f.area_ha||'?'} ha`,
+        layer:'fires'
+      }})
     })
   }
 
-  if (tool === 'nasa_firms_viirs' || tool === 'nasa_firms_modis') {
+  // 🛰️ Fires — NASA FIRMS
+  if (tool === 'firms_fires') {
     const hotspots = output.hotspots || output.fires || []
     hotspots.forEach(h => {
       if (!h.lat || !h.lon) return
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [h.lon, h.lat] },
-        properties: {
-          color: '#ef4444',
-          label: '🛰️',
-          popup: `🛰️ NASA FIRMS\nFRP: ${h.frp || '?'} MW\n${h.acq_date || ''}`,
-          layer: 'firms'
-        }
-      })
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[h.lon,h.lat] }, properties:{
+        color:'#ef4444', label:'🛰️',
+        popup:`🛰️ NASA FIRMS\nFRP: ${h.frp||'?'} MW\n${h.acq_date||''}`,
+        layer:'firms'
+      }})
     })
   }
 
-  if (tool === 'ais_area' || tool === 'ais_vessel') {
-    const vessels = output.vessels || (output.mmsi ? [output] : [])
+  // 🚢 Vessels — Digitraffic AIS
+  if (['vessels_area','vessels_bbox'].includes(tool)) {
+    const vessels = output.vessels || []
     vessels.forEach(v => {
-      if (!v.lat || !v.lon) return
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
-        properties: {
-          color: '#a78bfa',
-          label: v.name || v.mmsi || '🚢',
-          popup: `🚢 ${v.name || v.mmsi}\nTyyppi: ${v.type || '?'}\nNopeus: ${v.speed || '?'} kt`,
-          layer: 'vessels'
-        }
-      })
+      const lat = v.latitude ?? v.lat, lon = v.longitude ?? v.lon
+      if (!lat || !lon) return
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[lon,lat] }, properties:{
+        color: (v.sog_knots||0) > 1 ? '#a78bfa' : '#64748b',
+        label: String(v.mmsi||'🚢'),
+        popup:`🚢 MMSI: ${v.mmsi||'?'}\nNopeus: ${v.sog_knots||'?'} kn · Kurssi: ${v.cog_deg||'?'}°\nTila: ${v.nav_status||'?'}\nEtäisyys: ${v.distance_nm||'?'} nm`,
+        layer:'vessels'
+      }})
     })
   }
 
-  if (tool === 'stuk_radiation' || tool === 'stuk_stations') {
+  if (tool === 'vessel_detail') {
+    const lat = output.latitude ?? output.lat, lon = output.longitude ?? output.lon
+    if (lat && lon) features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[lon,lat] }, properties:{
+      color:'#a78bfa',
+      label: output.name || String(output.mmsi||'🚢'),
+      popup:`🚢 ${output.name||output.mmsi}\nNopeus: ${output.sog_knots||'?'} kn\nTila: ${output.nav_status||'?'}\nDest: ${output.destination||'?'}`,
+      layer:'vessels'
+    }})
+  }
+
+  // ☢️ Radiation
+  if (tool === 'stuk_radiation') {
     const stations = output.stations || (output.dose_rate !== undefined ? [{ ...output, ...input }] : [])
     stations.forEach(s => {
       if (!s.lat || !s.lon) return
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-        properties: {
-          color: s.dose_rate > 0.3 ? '#ef4444' : '#fbbf24',
-          label: `${s.dose_rate ?? '?'} µSv/h`,
-          popup: `☢️ STUK ${s.name || ''}\nAnnosnopeus: ${s.dose_rate || '?'} µSv/h`,
-          layer: 'radiation'
-        }
-      })
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[s.lon,s.lat] }, properties:{
+        color: (s.dose_rate||0) > 0.3 ? '#ef4444' : '#fbbf24',
+        label:`${s.dose_rate??'?'} µSv/h`,
+        popup:`☢️ STUK ${s.name||''}\nAnnosnopeus: ${s.dose_rate||'?'} µSv/h`,
+        layer:'radiation'
+      }})
     })
   }
 
+  // 🌋 GDACS alerts
+  if (tool === 'gdacs_alerts') {
+    const alerts = output.alerts || []
+    alerts.forEach(a => {
+      const lat = a.lat ?? a.latitude, lon = a.lon ?? a.longitude
+      if (!lat || !lon) return
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[lon,lat] }, properties:{
+        color: a.alert_level === 'Red' ? '#ef4444' : '#f97316',
+        label: a.event_type || '🌋',
+        popup:`🌋 ${a.title||a.event_type}\nTaso: ${a.alert_level||'?'}`,
+        layer:'gdacs'
+      }})
+    })
+  }
+
+  // 📍 Geocode
   if (tool === 'map_geocode') {
-    const lat = output.lat ?? output.latitude
-    const lon = output.lon ?? output.longitude
-    if (lat && lon) {
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [lon, lat] },
-        properties: {
-          color: '#7c6fcd',
-          label: output.name || output.display_name || '📍',
-          popup: `📍 ${output.name || output.display_name || 'Sijainti'}`,
-          layer: 'geocode'
-        }
-      })
-    }
+    const lat = output.lat ?? output.latitude, lon = output.lon ?? output.longitude
+    if (lat && lon) features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[lon,lat] }, properties:{
+      color:'#7c6fcd', label: output.name || output.display_name || '📍',
+      popup:`📍 ${output.name||output.display_name||'Sijainti'}`,
+      layer:'geocode'
+    }})
+  }
+
+  // 🔬 Cluster analysis — plot cluster centers
+  if (tool === 'detect_clusters') {
+    const clusters = output.clusters || []
+    clusters.forEach(c => {
+      if (!c.center_lat || !c.center_lon) return
+      features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[c.center_lon,c.center_lat] }, properties:{
+        color:'#f59e0b',
+        label:`${c.member_count}`,
+        popup:`🔬 Klusteri ${c.cluster_id}\nJäseniä: ${c.member_count}\nKeskipiste: ${c.center_lat?.toFixed(3)}, ${c.center_lon?.toFixed(3)}`,
+        layer:'clusters'
+      }})
+    })
   }
 
   return features
@@ -136,18 +205,26 @@ function parseToolOutput(tool, inputStr, outputStr) {
 const LAYER_LABELS = {
   adsb: '✈️ Lentokoneet',
   weather: '🌡️ Sää',
+  lightning: '⚡ Salamat',
   fires: '🔥 Tulipalot',
-  firms: '🛰️ NASA FIRMS',
+  firms: '🛰️ Satelliittipalot',
   vessels: '🚢 Alukset',
   radiation: '☢️ Säteily',
-  geocode: '📍 Paikka'
+  gdacs: '🌋 Katastrofit',
+  geocode: '📍 Paikka',
+  clusters: '🔬 Klusterit',
 }
 
-export default function AgentMapPanel({ agent, toolResults = [] }) {
+export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) {
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersRef = useRef([])
   const [layerCounts, setLayerCounts] = useState({})
+  const [drawing, setDrawing] = useState(false)
+  const [drawnAoi, setDrawnAoi] = useState(null)
+  const drawVertices = useRef([])
+  const drawMarkers = useRef([])
+  const drawingRef = useRef(false)
 
   useEffect(() => {
     let center = [25, 62], zoom = 5
@@ -182,7 +259,8 @@ export default function AgentMapPanel({ agent, toolResults = [] }) {
 
   useEffect(() => {
     const map = mapInstance.current
-    if (!map || !map.loaded()) return
+    if (!map) return
+    const applyMarkers = () => {
 
     markersRef.current.forEach(m => m.remove())
     markersRef.current = []
@@ -237,7 +315,53 @@ export default function AgentMapPanel({ agent, toolResults = [] }) {
     }
 
     setLayerCounts(counts)
+    } // applyMarkers
+    if (map.loaded()) applyMarkers()
+    else map.once('load', applyMarkers)
   }, [toolResults])
+
+  function startDraw() {
+    const map = mapInstance.current
+    if (!map) return
+    drawVertices.current = []
+    drawMarkers.current.forEach(m => m.remove())
+    drawMarkers.current = []
+    drawingRef.current = true
+    setDrawing(true)
+    map.getCanvas().style.cursor = 'crosshair'
+
+    const onClick = (e) => {
+      if (!drawingRef.current) return
+      const pt = [e.lngLat.lng, e.lngLat.lat]
+      drawVertices.current = [...drawVertices.current, pt]
+      const el = document.createElement('div')
+      el.style.cssText = 'width:8px;height:8px;background:#ef4444;border:2px solid white;border-radius:50%;'
+      const marker = new maplibregl.Marker({ element: el }).setLngLat(pt).addTo(map)
+      drawMarkers.current.push(marker)
+    }
+    const onDblClick = (e) => {
+      if (!drawingRef.current || drawVertices.current.length < 3) return
+      e.preventDefault()
+      map.off('click', onClick)
+      map.off('dblclick', onDblClick)
+      drawingRef.current = false
+      setDrawing(false)
+      map.getCanvas().style.cursor = ''
+      drawMarkers.current.forEach(m => m.remove())
+      drawMarkers.current = []
+      const ring = [...drawVertices.current, drawVertices.current[0]]
+      const geom = { type: 'Polygon', coordinates: [ring] }
+      setDrawnAoi(geom)
+      if (onAoiChange) onAoiChange(geom)
+    }
+    map.on('click', onClick)
+    map.on('dblclick', onDblClick)
+  }
+
+  function clearDraw() {
+    setDrawnAoi(null)
+    if (onAoiChange) onAoiChange(null)
+  }
 
   const hasData = Object.keys(layerCounts).length > 0
 
@@ -245,8 +369,19 @@ export default function AgentMapPanel({ agent, toolResults = [] }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#07111f' }}>
       <div style={{ padding: '8px 12px', background: '#0f1a2e', borderBottom: '1px solid #1e3a5f', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
         <span style={{ fontSize: '.8rem', fontWeight: 700, color: '#7c6fcd' }}>🗺️ Tilannekuva</span>
-        {agent?.aoi && (
+        {(agent?.aoi || drawnAoi) && (
           <span style={{ fontSize: '.7rem', background: '#7c6fcd20', border: '1px solid #7c6fcd40', borderRadius: 20, padding: '1px 8px', color: '#a29ae0' }}>AOI</span>
+        )}
+        {onAoiChange && !drawing && (
+          <button onClick={startDraw} title="Piirrä valvonta-alue kartalle" style={{ fontSize: '.7rem', background: '#1e3a5f', border: '1px solid #2d5a8f', borderRadius: 20, padding: '2px 10px', color: '#60a5fa', cursor: 'pointer' }}>
+            ✏️ {drawnAoi ? 'Piirrä uudelleen' : 'Rajaa alue'}
+          </button>
+        )}
+        {onAoiChange && drawing && (
+          <span style={{ fontSize: '.72rem', color: '#fbbf24' }}>🖱️ Klikkaa pisteitä · <strong>2×klikkaus</strong> sulkee</span>
+        )}
+        {onAoiChange && drawnAoi && !drawing && (
+          <button onClick={clearDraw} title="Poista alue" style={{ fontSize: '.7rem', background: '#1e1e2e', border: '1px solid #3f3f5f', borderRadius: 20, padding: '2px 8px', color: '#94a3b8', cursor: 'pointer' }}>✕</button>
         )}
         {Object.entries(layerCounts).map(([layer, count]) => (
           <span key={layer} style={{ fontSize: '.7rem', background: '#1e3a5f', borderRadius: 20, padding: '1px 8px', color: '#94a3b8' }}>

@@ -153,8 +153,8 @@ export default function App() {
     }
   }
 
-  const handleRunTest = (agent) => (message, onToken, onToolStart, onToolEnd, onDone, onError) => {
-    api.runAgentStream(agent.id, message, `test:${agent.id}`,
+  const handleRunTest = (agent) => (message, aoiOverride, onToken, onToolStart, onToolEnd, onDone, onError) => {
+    api.runAgentStream(agent.id, message, `test:${agent.id}`, aoiOverride,
       onToken, onToolStart, onToolEnd, onDone, onError, getToken)
   }
 

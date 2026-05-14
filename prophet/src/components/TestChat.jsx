@@ -3,13 +3,21 @@ import LocationPickerModal from './LocationPickerModal'
 import AgentMapPanel from './AgentMapPanel'
 
 const MAP_TOOLS = new Set([
-  'adsb_area','adsb_trail','adsb_flight','adsb_military',
-  'weather_area','fmi_observations','fmi_warnings',
-  'effis_fires','effis_risk',
-  'nasa_firms_viirs','nasa_firms_modis',
-  'ais_area','ais_vessel','ais_trail',
-  'stuk_radiation','stuk_stations',
-  'gdacs','map_geocode'
+  // Ilmaliikenne
+  'adsb_area','adsb_military','adsb_emergency',
+  'adsb_by_registration','adsb_by_callsign','adsb_by_squawk','adsb_by_type',
+  'aircraft_trail','aircraft_detail',
+  'opensky_area','opensky_aircraft',
+  // Sää
+  'weather_area','fmi_observations','fmi_warnings','fmi_lightning',
+  // Tulipalot
+  'effis_fires','firms_fires',
+  // Meriliikenne
+  'vessels_area','vessels_bbox','vessel_detail',
+  // Säteily & Hälytykset
+  'stuk_radiation','gdacs_alerts',
+  // Paikka & Analytiikka
+  'map_geocode','detect_clusters','correlate_events',
 ])
 
 export default function TestChat({ agent, onRun }) {
@@ -19,10 +27,12 @@ export default function TestChat({ agent, onRun }) {
   const [activeTools, setActiveTools] = useState([])
   const [showMap, setShowMap] = useState(false)
   const [toolResults, setToolResults] = useState([])
+  const [localAoi, setLocalAoi] = useState(null)
   const pendingToolInputs = useRef({})
   const bottomRef = useRef(null)
 
-  const isMapBound = agent?.aoi || agent?.tools?.some(t => MAP_TOOLS.has(t))
+  const effectiveAoi = localAoi || agent?.aoi || null
+  const isMapBound = effectiveAoi || agent?.tools?.some(t => MAP_TOOLS.has(t))
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -40,6 +50,7 @@ export default function TestChat({ agent, onRun }) {
 
     onRun(
       userMsg,
+      effectiveAoi,
       // onToken
       (token) => {
         aiContent += token
@@ -70,8 +81,26 @@ export default function TestChat({ agent, onRun }) {
       // onError
       (err) => {
         setStreaming(false)
+        const HTTP_MEANINGS = {
+          '400': 'Virheellinen pyyntö — tarkista parametrit',
+          '401': 'Ei autentikoitu — API-avain puuttuu tai on virheellinen',
+          '403': 'Ei käyttöoikeutta — suunnitelma tai avain ei tue tätä toimintoa',
+          '404': 'Ei löydy — resurssia tai endpointtia ei ole',
+          '408': 'Aikakatkaisu — palvelu ei vastannut ajoissa',
+          '429': 'Liian monta pyyntöä — odota hetki ja yritä uudelleen',
+          '500': 'Palvelinvirhe — työkalu kaatui odottamattomasti',
+          '502': 'Yhdyskäytävävirhe — välityspalvelin sai virhevastauksen',
+          '503': 'Palvelu ei käytettävissä — kokeile myöhemmin uudelleen',
+          '504': 'Yhdyskäytävän aikakatkaisu — palvelu ei vastannut',
+        }
+        const codeMatch = String(err).match(/\b([45]\d{2})\b/)
+        const code = codeMatch?.[1]
+        const meaning = code ? HTTP_MEANINGS[code] : null
+        const display = meaning
+          ? `Virhe ${code}: ${meaning}`
+          : `Virhe: ${err}`
         setMessages(m => [...m.filter(x => !x.streaming),
-          { role: 'error', content: `Virhe: ${err}` }])
+          { role: 'error', content: display }])
         setActiveTools([])
       },
     )
@@ -83,7 +112,7 @@ export default function TestChat({ agent, onRun }) {
       {/* Map panel — left side when map-bound */}
       {isMapBound && (
         <div style={{ flex: 1, minWidth: 0, borderRight: '1px solid #1e3a5f' }}>
-          <AgentMapPanel agent={agent} toolResults={toolResults} />
+          <AgentMapPanel agent={agent} toolResults={toolResults} onAoiChange={setLocalAoi} />
         </div>
       )}
 
