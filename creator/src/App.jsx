@@ -76,7 +76,20 @@ export default function App() {
     setError(null)
     try {
       if (editingAgent) {
-        await api.updateAgent(editingAgent.id, formData)
+        try {
+          await api.updateAgent(editingAgent.id, formData)
+        } catch (updateErr) {
+          // Agent not owned by user → auto-fork as new private agent
+          const isOwnershipError = updateErr.status === 403 ||
+            updateErr.status === 404 ||
+            updateErr.message?.toLowerCase().includes('not owned')
+          if (isOwnershipError) {
+            await api.createAgent({ ...formData, visibility: 'private' })
+            setError('⚠️ Et omista tätä agenttia — tallennettu uutena yksityisenä agenttinasi ✓')
+          } else {
+            throw updateErr
+          }
+        }
       } else {
         await api.createAgent(formData)
       }

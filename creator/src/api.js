@@ -15,7 +15,10 @@ async function authFetch(url, options = {}, getToken) {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || `HTTP ${res.status}`)
+    const msg = err.detail || `HTTP ${res.status}`
+    const error = new Error(msg)
+    error.status = res.status
+    throw error
   }
   return res.json()
 }

@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
+import LocationPickerModal from './LocationPickerModal'
 
 export default function TestChat({ agent, onRun }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [activeTools, setActiveTools] = useState([])
+  const [showMap, setShowMap] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -87,17 +89,33 @@ export default function TestChat({ agent, onRun }) {
       </div>
 
       <div className="test-chat-input">
+        <button
+          className="map-pick-btn"
+          onClick={() => setShowMap(true)}
+          title="Valitse sijainti kartalta"
+          disabled={streaming}
+        >📍</button>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && send()}
-          placeholder="Kirjoita testikysymys…"
+          placeholder="Kirjoita viesti tai valitse sijainti kartalta…"
           disabled={streaming}
         />
         <button onClick={send} disabled={streaming || !input.trim()}>
           {streaming ? '…' : '↑'}
         </button>
       </div>
+
+      {showMap && (
+        <LocationPickerModal
+          onConfirm={(locationText) => {
+            setInput(prev => prev ? `${locationText} — ${prev}` : locationText)
+            setShowMap(false)
+          }}
+          onClose={() => setShowMap(false)}
+        />
+      )}
     </div>
   )
 }

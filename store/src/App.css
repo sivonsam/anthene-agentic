@@ -326,3 +326,27 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
   display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px;
   border-top: 1px solid var(--border); margin-top: 4px;
 }
+
+/* ── Map location picker button ── */
+.map-pick-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #7c6fcd;
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0 10px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.map-pick-btn:hover:not(:disabled) {
+  background: #7c6fcd22;
+  border-color: #7c6fcd;
+}
+.map-pick-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

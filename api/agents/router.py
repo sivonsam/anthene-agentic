@@ -65,7 +65,12 @@ async def update_agent(
     patch["updated_at"] = datetime.now(timezone.utc).isoformat()
     updated = await cosmos.update_agent(agent_id, user.id, patch)
     if updated is None:
-        raise HTTPException(status_code=404, detail="Agent not found or not owned by you")
+        # Check if the agent exists at all (owned by someone else → 403, truly missing → 404)
+        all_agents = await cosmos.list_all_agents()
+        exists = any(a["id"] == agent_id for a in all_agents)
+        if exists:
+            raise HTTPException(status_code=403, detail="Agent not owned by you")
+        raise HTTPException(status_code=404, detail="Agent not found")
     return updated
 
 
