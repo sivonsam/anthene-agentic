@@ -101,8 +101,8 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-brand">
-          <span className="brand-hex">⬡</span>
-          <span className="brand-name">Anthene</span>
+          <span className="brand-hex">⚡</span>
+          <span className="brand-name">Anthene Agentic</span>
           <span className="brand-product">Agent Creator</span>
         </div>
         <nav className="header-nav">
@@ -126,13 +126,15 @@ export default function App() {
         </div>
       </header>
 
+      <div className="app-tagline">Luo, konfiguroi ja testaa omia AI-agentteja — määritä kyvykkyydet, systeemikehote ja julkaise Storeen</div>
+
       <main className="app-main">
         {error && <div className="error-banner">⚠️ {error} <button onClick={() => setError(null)}>✕</button></div>}
 
         {!isLoggedIn ? (
           <div className="login-wall">
             <div className="login-card">
-              <span className="login-hex">⬡</span>
+              <span className="login-hex">⚡</span>
               <h1>Anthene Agent Creator</h1>
               <p>Luo, hallinnoi ja testaa omia AI-agenttejasi.<br/>Kirjaudu sisään jatkaaksesi.</p>
               <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
@@ -222,6 +224,9 @@ export default function App() {
           </>
         )}
       </main>
+      <footer className="app-footer">
+        Powered by <strong>Vivicta</strong>
+      </footer>
     </div>
   )
 }

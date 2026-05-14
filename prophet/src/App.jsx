@@ -68,7 +68,7 @@ function MsalGate() {
     return (
       <div className="login-wall">
         <div className="login-card">
-          <span className="login-hex">⬡</span>
+          <span className="login-hex">⚡</span>
           <h1>Anthene Agent Prophet</h1>
           <p>Operationaalinen kojelauta omille agenteillesi.<br />Kirjaudu sisään jatkaaksesi.</p>
           <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
@@ -247,11 +247,12 @@ function Prophet({ user, getToken, onLogout }) {
       {/* ── Sidebar ───────────────────────────────────────────────────────── */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="brand-hex">⬡</span>
+          <span className="brand-hex">⚡</span>
           {!sidebarCollapsed && (
             <div className="brand-text">
-              <span className="brand-name">Anthene</span>
+              <span className="brand-name">Anthene Agentic</span>
               <span className="brand-sub">Agent Prophet</span>
+              <span className="brand-tagline">Operoi AI-agenttejasi</span>
             </div>
           )}
         </div>
@@ -320,6 +321,9 @@ function Prophet({ user, getToken, onLogout }) {
               )}
               {DEV_MODE && <span className="dev-badge">DEV</span>}
             </div>
+          )}
+          {!sidebarCollapsed && (
+            <div className="sidebar-powered">Powered by <strong>Vivicta</strong></div>
           )}
         </div>
       </aside>

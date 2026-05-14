@@ -59,7 +59,7 @@ body {
   min-height: 64px;
   flex-shrink: 0;
 }
-.brand-hex { font-size: 22px; color: var(--accent); flex-shrink: 0; }
+.brand-hex { font-size: 22px; color: var(--red); flex-shrink: 0; }
 .brand-text { display: flex; flex-direction: column; gap: 1px; overflow: hidden; white-space: nowrap; }
 .brand-name { font-weight: 700; font-size: 15px; }
 .brand-sub  { font-size: 11px; color: var(--text2); }
@@ -389,7 +389,7 @@ body {
   max-width: 420px;
   width: 100%;
 }
-.login-hex { font-size: 52px; }
+.login-hex { font-size: 52px; color: var(--red); }
 .login-card h1 { margin: 16px 0 8px; font-size: 22px; }
 .login-card p { color: var(--text2); line-height: 1.6; margin-bottom: 28px; }
 
@@ -911,3 +911,19 @@ body {
 }
 .test-chat-input button:hover:not(:disabled) { background: var(--accent-hover); }
 .test-chat-input button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Sidebar powered & tagline ──────────────────────────────────────────────── */
+.brand-tagline {
+  font-size: 9px;
+  color: var(--text2);
+  opacity: 0.7;
+  margin-top: 1px;
+}
+.sidebar-powered {
+  font-size: 10px;
+  color: var(--text2);
+  opacity: 0.6;
+  margin-top: 8px;
+  text-align: center;
+}
+.sidebar-powered strong { color: var(--accent); opacity: 1; }

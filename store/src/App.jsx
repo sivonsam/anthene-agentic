@@ -16,7 +16,7 @@ const SORT_OPTIONS = [
   { label: 'Eniten työkaluja', value: 'tools' },
 ]
 
-const VIEWS = ['Kauppa', 'Omat', 'Admin']
+const VIEWS = ['Store', 'Omat', 'Admin']
 
 let toastIdCounter = 0
 
@@ -24,7 +24,7 @@ export default function App() {
   const { instance, accounts } = useMsal()
   const isAuthenticated = useIsAuthenticated()
 
-  const [view, setView] = useState('Kauppa')
+  const [view, setView] = useState('Store')
   const [storeAgents, setStoreAgents] = useState([])
   const [myAgents, setMyAgents] = useState([])
   const [allAgents, setAllAgents] = useState([])
@@ -221,8 +221,8 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-brand">
-          <span className="brand-hex">⬡</span>
-          <span className="brand-name">Anthene</span>
+          <span className="brand-hex">⚡</span>
+          <span className="brand-name">Anthene Agentic</span>
           <span className="brand-product">AgentStore</span>
         </div>
         <nav className="header-nav">
@@ -232,7 +232,7 @@ export default function App() {
               className={`nav-btn ${view === v ? 'active' : ''}`}
               onClick={() => { setPreviewAgent(null); setView(v) }}
             >
-              {v === 'Kauppa' ? '🏪' : v === 'Omat' ? '🤖' : '🛡️'} {v}
+              {v === 'Store' ? '🏪' : v === 'Omat' ? '🤖' : '🛡️'} {v}
             </button>
           ))}
         </nav>
@@ -250,11 +250,13 @@ export default function App() {
         </div>
       </header>
 
+      <div className="app-tagline">Selaa, arvioi ja ota käyttöön jaettuja AI-agentteja — yhteisön parhaat kyvykkyydet yhdessä paikassa</div>
+
       <main className="app-main">
         {!isLoggedIn ? (
           <div className="login-wall">
             <div className="login-card">
-              <span className="login-hex">⬡</span>
+              <span className="login-hex">⚡</span>
               <h1>Anthene AgentStore</h1>
               <p>Selaa ja ota käyttöön jaettuja AI-agentteja.<br/>Kirjaudu sisään jatkaaksesi.</p>
               <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
@@ -262,11 +264,11 @@ export default function App() {
           </div>
         ) : (
           <>
-            {/* ── Kauppa ── */}
-            {view === 'Kauppa' && (
+            {/* ── Store ── */}
+            {view === 'Store' && (
               <section className="view">
                 <div className="view-toolbar">
-                  <h2>🏪 Kauppa <span className="count-badge">{filteredStore.length}</span></h2>
+                  <h2>🏪 Store <span className="count-badge">{filteredStore.length}</span></h2>
                 </div>
                 <SearchBar />
                 {loadingStore ? (
@@ -274,7 +276,7 @@ export default function App() {
                 ) : filteredStore.length === 0 ? (
                   <div className="empty-state">
                     <div className="empty-icon">🏪</div>
-                    <h3>{search || category !== 'Kaikki' ? 'Ei tuloksia' : 'Kauppa on tyhjä'}</h3>
+                    <h3>{search || category !== 'Kaikki' ? 'Ei tuloksia' : 'Store on tyhjä'}</h3>
                     <p>{search || category !== 'Kaikki' ? 'Kokeile eri hakusanoja tai kategorioita.' : 'Ei jaettuja agentteja saatavilla.'}</p>
                     {(search || category !== 'Kaikki') && (
                       <button className="btn-secondary" onClick={() => { setSearch(''); setCategory('Kaikki') }}>
@@ -311,10 +313,10 @@ export default function App() {
                   <div className="empty-state">
                     <div className="empty-icon">🤖</div>
                     <h3>{search || category !== 'Kaikki' ? 'Ei tuloksia' : 'Ei omia agentteja'}</h3>
-                    <p>{search || category !== 'Kaikki' ? 'Kokeile eri hakusanoja.' : 'Ota käyttöön agentteja Kaupasta.'}</p>
+                    <p>{search || category !== 'Kaikki' ? 'Kokeile eri hakusanoja.' : 'Ota käyttöön agentteja Storesta.'}</p>
                     {!(search || category !== 'Kaikki') && (
-                      <button className="btn-primary" onClick={() => setView('Kauppa')}>
-                        Selaa Kauppaa
+                      <button className="btn-primary" onClick={() => setView('Store')}>
+                        Selaa Storea
                       </button>
                     )}
                   </div>
@@ -357,12 +359,16 @@ export default function App() {
           agent={previewAgent}
           onClose={() => setPreviewAgent(null)}
           onRun={handleRunTest(previewAgent)}
-          onCopy={view === 'Kauppa' ? handleCopy : undefined}
+          onCopy={view === 'Store' ? handleCopy : undefined}
         />
       )}
 
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      <footer className="app-footer">
+        Powered by <strong>Vivicta</strong>
+      </footer>
     </div>
   )
 }
