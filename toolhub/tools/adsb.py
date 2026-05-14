@@ -135,3 +135,52 @@ async def adsb_military() -> dict:
     aircraft = [_classify_adsb(ac) for ac in data.get("ac", [])]
     return {"total": len(aircraft), "aircraft": aircraft[:200]}
 
+
+
+async def aircraft_trail(hex_code: str) -> dict:
+    """Recent flight trail (positions over time) for a specific aircraft by ICAO24 hex address.
+    Returns list of {lat, lon, altitude_ft, ground_speed_kt, timestamp} points.
+    Uses ADS-B Exchange /trail/ endpoint. Falls back to note if no key."""
+    if not ADSB_API_KEY:
+        return {"error": "ADS-B Exchange API key not configured.", "trail": [], "hex": hex_code}
+    url = f"{ADSB_BASE}/trail/{hex_code}/"
+    headers = {"x-rapidapi-host": "adsbexchange-com1.p.rapidapi.com", "x-rapidapi-key": ADSB_API_KEY}
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+    trail = []
+    for p in data.get("trail", []):
+        trail.append({
+            "lat": p.get("lat"), "lon": p.get("lon"),
+            "altitude_ft": p.get("alt"),
+            "ground_speed_kt": p.get("gs"),
+            "timestamp": p.get("ts"),
+        })
+    ac = data.get("ac") or {}
+    return {
+        "hex": hex_code,
+        "callsign": (ac.get("flight") or "").strip() or None,
+        "registration": ac.get("r"),
+        "type": ac.get("t"),
+        "trail": trail,
+        "trail_points": len(trail),
+        "source": "ADS-B Exchange",
+    }
+
+
+async def aircraft_detail(hex_code: str) -> dict:
+    """Current position and details for a specific aircraft by ICAO24 hex address.
+    Uses ADS-B Exchange /hex/ endpoint."""
+    if not ADSB_API_KEY:
+        return {"error": "ADS-B Exchange API key not configured.", "hex": hex_code}
+    url = f"{ADSB_BASE}/hex/{hex_code}/"
+    headers = {"x-rapidapi-host": "adsbexchange-com1.p.rapidapi.com", "x-rapidapi-key": ADSB_API_KEY}
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+    aircraft_list = data.get("ac", [])
+    if not aircraft_list:
+        return {"error": f"Aircraft {hex_code} not found or not currently tracked.", "hex": hex_code}
+    return _classify_adsb(aircraft_list[0])

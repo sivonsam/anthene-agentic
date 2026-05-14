@@ -9,7 +9,7 @@ Each open-data tool includes:
   open_data          : True = publicly available, no commercial key needed by default
 """
 
-from tools.adsb import adsb_area, adsb_military
+from tools.adsb import adsb_area, adsb_military, aircraft_trail, aircraft_detail
 from tools.effis import effis_fires
 from tools.weather import weather_area
 from tools.map_tools import map_geocode
@@ -17,7 +17,9 @@ from tools.web_search import web_search
 from tools.file_handler import file_read
 from tools.telegram import telegram_notify
 from tools.calculator import calculator
-from tools.fmi import fmi_weather_observations, fmi_warnings
+from tools.fmi import fmi_weather_observations, fmi_warnings, fmi_lightning
+from tools.analysis import detect_clusters, correlate_events
+from tools.sanctions import sanctions_check_vessel, sanctions_check_entity
 from tools.fingrid import fingrid_grid_status, fingrid_disturbances
 from tools.gdacs import gdacs_alerts
 from tools.opensky import opensky_area, opensky_aircraft
@@ -25,6 +27,7 @@ from tools.stuk import stuk_radiation
 from tools.firms import firms_fires
 from tools.entsoe import entsoe_load, entsoe_generation_outages
 from tools.gas_storage import gas_storage
+from tools.vessels import vessels_area, vessels_bbox, vessel_detail
 
 TOOL_REGISTRY: dict[str, dict] = {
     # ── Air traffic ──────────────────────────────────────────
@@ -51,6 +54,24 @@ TOOL_REGISTRY: dict[str, dict] = {
         "license": "Kaupallinen API-avain vaaditaan",
         "open_data": False,
         "avoindata_url": None,
+    },
+    "aircraft_trail": {
+        "fn": aircraft_trail,
+        "name": "Aircraft Trail by Hex",
+        "description": "Recent flight trail (positions over time) for a specific aircraft by ICAO24 hex. (ADS-B Exchange)",
+        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex identifier (e.g. 4601f4)"}},
+        "source_org": "ADS-B Exchange",
+        "license": "Kaupallinen API-avain",
+        "open_data": False,
+    },
+    "aircraft_detail": {
+        "fn": aircraft_detail,
+        "name": "Aircraft Detail by Hex",
+        "description": "Current position and details for a specific aircraft by ICAO24 hex address. (ADS-B Exchange)",
+        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex identifier"}},
+        "source_org": "ADS-B Exchange",
+        "license": "Kaupallinen API-avain",
+        "open_data": False,
     },
     "opensky_area": {
         "fn": opensky_area,
@@ -96,6 +117,20 @@ TOOL_REGISTRY: dict[str, dict] = {
         "parameters": {"region": {"type": "string"}},
         "avoindata_category": "ymparisto",
         "avoindata_category_label": "Ympäristö",
+        "source_org": "Ilmatieteen laitos (FMI)",
+        "license": "CC BY 4.0",
+        "open_data": True,
+        "avoindata_url": "https://avoindata.suomi.fi/data/fi/dataset?q=ilmatieteen+laitos",
+    },
+    "fmi_lightning": {
+        "fn": fmi_lightning,
+        "name": "FMI Lightning Observations",
+        "description": "Lightning strike detections near a location from FMI open data. Covers Finland and surrounding seas.",
+        "parameters": {
+            "lat": {"type": "number"},
+            "lon": {"type": "number"},
+            "hours_back": {"type": "integer", "description": "Hours back to search (1-6)"},
+        },
         "source_org": "Ilmatieteen laitos (FMI)",
         "license": "CC BY 4.0",
         "open_data": True,
@@ -269,6 +304,51 @@ TOOL_REGISTRY: dict[str, dict] = {
         "parameters": {"expression": {"type": "string"}},
         "open_data": False,
     },
+    # ── Spatial Analysis ──────────────────────────────────────
+    "detect_clusters": {
+        "fn": detect_clusters,
+        "name": "Detect Spatial Clusters",
+        "description": "DBSCAN-style spatial clustering of geolocated items (vessels, aircraft, etc.).",
+        "parameters": {
+            "items_json": {"type": "string", "description": "JSON array of objects with lat/lon"},
+            "eps_km": {"type": "number"},
+            "min_points": {"type": "integer"},
+        },
+        "open_data": True,
+    },
+    "correlate_events": {
+        "fn": correlate_events,
+        "name": "Correlate Events",
+        "description": "Correlate two sets of geolocated events by spatial proximity.",
+        "parameters": {
+            "primary_json": {"type": "string"},
+            "secondary_json": {"type": "string"},
+            "time_window_minutes": {"type": "integer"},
+            "distance_km": {"type": "number"},
+        },
+        "open_data": True,
+    },
+    # ── Sanctions ─────────────────────────────────────────────
+    "sanctions_vessel": {
+        "fn": sanctions_check_vessel,
+        "name": "Sanctions Check (Vessel)",
+        "description": "Check vessel against international sanctions lists (UN, EU, US OFAC, UK). (OpenSanctions)",
+        "parameters": {
+            "query": {"type": "string", "description": "Vessel name, MMSI or IMO number"},
+            "fuzzy": {"type": "boolean"},
+        },
+        "open_data": True,
+    },
+    "sanctions_entity": {
+        "fn": sanctions_check_entity,
+        "name": "Sanctions Check (Entity)",
+        "description": "Check company or person against international sanctions lists. (OpenSanctions)",
+        "parameters": {
+            "query": {"type": "string"},
+            "schema": {"type": "string", "description": "LegalEntity, Person or Organization"},
+        },
+        "open_data": True,
+    },
 }
 
 
@@ -306,6 +386,28 @@ TOOL_REGISTRY: dict[str, dict] = {
         "category": "ilmailu",
         "category_label": "🛫 Ilmailu",
     },
+    "aircraft_trail": {
+        "fn": aircraft_trail,
+        "name": "Lentokoneen reitti (hex)",
+        "description": "Yksittäisen lentokoneen lentoreitti ICAO24 hex-koodilla. Palauttaa peräkkäiset sijaintipisteet, korkeuden ja nopeuden. (ADS-B Exchange)",
+        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex-tunniste (esim. 4601f4)"}},
+        "category": "ilmailu",
+        "category_label": "✈️ Ilmaliikenne",
+        "source_org": "ADS-B Exchange",
+        "license": "Kaupallinen API-avain",
+        "open_data": False,
+    },
+    "aircraft_detail": {
+        "fn": aircraft_detail,
+        "name": "Lentokone (hex-haku)",
+        "description": "Yksittäisen lentokoneen reaaliaikainen sijainti ja tiedot ICAO24 hex-koodilla. (ADS-B Exchange)",
+        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex-tunniste"}},
+        "category": "ilmailu",
+        "category_label": "✈️ Ilmaliikenne",
+        "source_org": "ADS-B Exchange",
+        "license": "Kaupallinen API-avain",
+        "open_data": False,
+    },
     "opensky_area": {
         "fn": opensky_area,
         "name": "OpenSky Aircraft Area",
@@ -338,6 +440,22 @@ TOOL_REGISTRY: dict[str, dict] = {
         "parameters": {"region": {"type": "string"}},
         "category": "saa",
         "category_label": "🌦 Sää & Ilmasto",
+    },
+    "fmi_lightning": {
+        "fn": fmi_lightning,
+        "name": "FMI Salamahavainnot",
+        "description": "Salamahavainnot lähialueelta FMI:n avoimen datan kautta. Kattaa Suomen ja lähimeret. Päivittyy muutaman minuutin välein.",
+        "parameters": {
+            "lat": {"type": "number"},
+            "lon": {"type": "number"},
+            "hours_back": {"type": "integer", "description": "Tunteja taaksepäin (1-6)"},
+        },
+        "category": "saa",
+        "category_label": "🌤️ Sää & Ilmasto",
+        "source_org": "FMI / Ilmatieteen laitos",
+        "license": "CC BY 4.0",
+        "open_data": True,
+        "avoindata_url": "https://www.ilmatieteenlaitos.fi/avoin-data",
     },
     "weather_area": {
         "fn": weather_area,
@@ -423,6 +541,57 @@ TOOL_REGISTRY: dict[str, dict] = {
         "category": "saateily",
         "category_label": "☢️ Säteily & CBRN",
     },
+    # ── ⚓ Meriliikenne & AIS ─────────────────────────────────
+    "vessels_area": {
+        "fn": vessels_area,
+        "name": "AIS Alukset (säde)",
+        "description": "Live AIS-aluspaikannus säteen sisällä. Nopeus (sog), kurssi, navigointitila, MMSI. Itämeri ja Suomen rannikko. (Digitraffic, CC BY 4.0)",
+        "parameters": {
+            "lat": {"type": "number", "description": "Keskipisteen leveysaste"},
+            "lon": {"type": "number", "description": "Keskipisteen pituusaste"},
+            "radius_nm": {"type": "number", "description": "Hakusäde meripeninkulmissa (oletus 30)"},
+            "min_speed_knots": {"type": "number", "description": "Valinnainen miniminopeus (esim. 0.5 liikkuvat alukset)"},
+            "max_speed_knots": {"type": "number", "description": "Valinnainen maksiminopeus"},
+        },
+        "category": "meriliikenne",
+        "category_label": "⚓ Meriliikenne & AIS",
+        "source_org": "Digitraffic / Väylävirasto",
+        "license": "CC BY 4.0",
+        "open_data": True,
+        "avoindata_url": "https://www.digitraffic.fi/meriliikenne/",
+    },
+    "vessels_bbox": {
+        "fn": vessels_bbox,
+        "name": "AIS Alukset (alue/AOI)",
+        "description": "Live AIS-aluspaikannus rajatussa suorakulmaisessa alueessa. Sopii AOI-valvonta-agentille. (Digitraffic, CC BY 4.0)",
+        "parameters": {
+            "lat_min": {"type": "number", "description": "Alueen eteläinen leveysaste"},
+            "lat_max": {"type": "number", "description": "Alueen pohjoinen leveysaste"},
+            "lon_min": {"type": "number", "description": "Alueen läntinen pituusaste"},
+            "lon_max": {"type": "number", "description": "Alueen itäinen pituusaste"},
+            "min_speed_knots": {"type": "number", "description": "Valinnainen miniminopeus"},
+        },
+        "category": "meriliikenne",
+        "category_label": "⚓ Meriliikenne & AIS",
+        "source_org": "Digitraffic / Väylävirasto",
+        "license": "CC BY 4.0",
+        "open_data": True,
+        "avoindata_url": "https://www.digitraffic.fi/meriliikenne/",
+    },
+    "vessel_detail": {
+        "fn": vessel_detail,
+        "name": "AIS Alustiedot (MMSI)",
+        "description": "Yksittäisen aluksen reaaliaikainen sijainti, nopeus, kurssi, aluksen nimi, tyyppi, määränpää MMSI-numerolla. (Digitraffic, CC BY 4.0)",
+        "parameters": {
+            "mmsi": {"type": "integer", "description": "9-numeroinen MMSI-tunniste"},
+        },
+        "category": "meriliikenne",
+        "category_label": "⚓ Meriliikenne & AIS",
+        "source_org": "Digitraffic / Väylävirasto",
+        "license": "CC BY 4.0",
+        "open_data": True,
+        "avoindata_url": "https://www.digitraffic.fi/meriliikenne/",
+    },
     # ── 📍 Paikkatiedot & Kartat ──────────────────────────────
     "map_geocode": {
         "fn": map_geocode,
@@ -456,6 +625,64 @@ TOOL_REGISTRY: dict[str, dict] = {
         "parameters": {"expression": {"type": "string"}},
         "category": "tiedustelu",
         "category_label": "🔍 Tiedustelu & Analytiikka",
+    },
+    # ── 🔬 Spatial Analysis ──────────────────────────────────
+    "detect_clusters": {
+        "fn": detect_clusters,
+        "name": "Klusterianalyysi",
+        "description": "Havaitsee maantieteelliset klusterit alusten, lentokoneiden tai muiden kohteiden joukosta. Syötteenä JSON-lista lat/lon-koordinaateilla varustetuista kohteista.",
+        "parameters": {
+            "items_json": {"type": "string", "description": "JSON-array kohteista joilla lat ja lon kentät"},
+            "eps_km": {"type": "number", "description": "Klusterin maksimietäisyys km (oletus 5)"},
+            "min_points": {"type": "integer", "description": "Minimikoko klusterille (oletus 2)"},
+        },
+        "category": "analytiikka",
+        "category_label": "🔬 Analytiikka",
+        "open_data": True,
+    },
+    "correlate_events": {
+        "fn": correlate_events,
+        "name": "Tapahtumien korrelaatio",
+        "description": "Korreloi kaksi tapahtumajoukkoa sijainnin perusteella. Löytää alukset ja lentokoneet jotka olivat samassa paikassa samaan aikaan.",
+        "parameters": {
+            "primary_json": {"type": "string", "description": "Ensisijainen tapahtumajoukko JSON-muodossa (lat/lon)"},
+            "secondary_json": {"type": "string", "description": "Toissijainen tapahtumajoukko JSON-muodossa (lat/lon)"},
+            "time_window_minutes": {"type": "integer"},
+            "distance_km": {"type": "number"},
+        },
+        "category": "analytiikka",
+        "category_label": "🔬 Analytiikka",
+        "open_data": True,
+    },
+    # ── 🚨 Pakotteet & Tiedustelu ────────────────────────────
+    "sanctions_vessel": {
+        "fn": sanctions_check_vessel,
+        "name": "Pakotelistaus (alus)",
+        "description": "Tarkistaa aluksen kansainvälisiltä pakotelistoilta (YK, EU, USA OFAC, UK). Haku nimellä, MMSI:llä tai IMO-numerolla. (OpenSanctions, CC BY-NC 4.0)",
+        "parameters": {
+            "query": {"type": "string", "description": "Aluksen nimi, MMSI tai IMO-numero"},
+            "fuzzy": {"type": "boolean", "description": "Salli epätarkka haku (oletus true)"},
+        },
+        "category": "tiedustelu",
+        "category_label": "🔍 Tiedustelu & Analytiikka",
+        "source_org": "OpenSanctions",
+        "license": "CC BY-NC 4.0",
+        "open_data": True,
+        "avoindata_url": "https://www.opensanctions.org/",
+    },
+    "sanctions_entity": {
+        "fn": sanctions_check_entity,
+        "name": "Pakotelistaus (yritys/henkilö)",
+        "description": "Tarkistaa yrityksen tai henkilön kansainvälisiltä pakotelistoilta. Kattaa yli 100 kansallista listaa. (OpenSanctions, CC BY-NC 4.0)",
+        "parameters": {
+            "query": {"type": "string", "description": "Nimi tai organisaatio"},
+            "schema": {"type": "string", "description": "LegalEntity, Person tai Organization"},
+        },
+        "category": "tiedustelu",
+        "category_label": "🔍 Tiedustelu & Analytiikka",
+        "source_org": "OpenSanctions",
+        "license": "CC BY-NC 4.0",
+        "open_data": True,
     },
     # ── 📢 Viestintä ─────────────────────────────────────────
     "telegram_notify": {

@@ -153,6 +153,32 @@ async def run_agent_stream(
 
         # Build system prompt — append AOI context when defined
         system_prompt = agent_def.get("system_prompt", "You are a helpful assistant.")
+
+        # --- Capability constraint (always injected) ---
+        # Build tool list description from selected tools only
+        if selected_tools:
+            tool_lines = "\n".join(
+                f"  - {t['name']}: {t.get('description', '')}" for t in selected_tools
+            )
+            capability_block = (
+                "\n\n---\nKÄYTETTÄVISSÄ OLEVAT KYVYKKYYDET (vain nämä):\n"
+                f"{tool_lines}\n\n"
+                "TÄRKEÄ RAJOITE: Toimi AINOASTAAN yllä lueteltujen työkalujen ja kyvykkyyksien puitteissa. "
+                "Älä koskaan ehdota ulkoisia rajapintoja, kolmannen osapuolen palveluita, webhookeja, "
+                "skriptejä tai muita integraatioita joita ei ole lueteltu yllä. "
+                "Jos käyttäjä pyytää jotain mitä tämä järjestelmä ei pysty tekemään, "
+                "vastaa lyhyesti: mitä pyydettiin, miksi se ei onnistu nykyisillä kyvykkyyksillä, "
+                "ja ehdota pelkästään kirjausta kehitys-backlogiin. Älä anna ohjeita ulkoisiin järjestelmiin."
+                "---"
+            )
+        else:
+            capability_block = (
+                "\n\n---\nEi aktiivisia työkaluja. Voit vastata vain yleisiin kysymyksiin. "
+                "Jos käyttäjä pyytää dataa tai toimintoja, kerro että kyvykkyys puuttuu "
+                "ja ehdota kirjausta kehitys-backlogiin.\n---"
+            )
+        system_prompt += capability_block
+
         if aoi_bbox:
             system_prompt += (
                 f"\n\nValvonta-alue (AOI) on määritetty. Käytä aina tätä aluetta geotyökaluissa ellei käyttäjä erikseen pyydä muuta:\n"

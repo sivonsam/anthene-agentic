@@ -97,3 +97,51 @@ async def fmi_warnings(region: str = "Finland") -> dict:
             }
     except Exception as exc:
         return {"error": str(exc), "warning_count": 0}
+
+
+async def fmi_lightning(lat: float, lon: float, hours_back: int = 2) -> dict:
+    """Lightning strike detections near a location from FMI open data.
+    Covers Finland and surrounding seas. Updates every few minutes.
+
+    Args:
+        lat: Center latitude
+        lon: Center longitude
+        hours_back: How many hours back to search (1-6)
+    """
+    hours_back = min(max(hours_back, 1), 6)
+    params = {
+        "service": "WFS",
+        "version": "2.0.0",
+        "request": "getFeature",
+        "storedquery_id": "fmi::observations::lightning::multipointcoverage",
+        "bbox": f"{lon-3},{lat-3},{lon+3},{lat+3}",
+        "starttime": _iso_now(-hours_back),
+        "endtime": _iso_now(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(FMI_WFS, params=params)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.content)
+
+        # Parse lightning positions from gml:positions
+        strikes = []
+        pos_els = root.findall(".//{http://www.opengis.net/gml/3.2}pos")
+        for el in pos_els:
+            parts = (el.text or "").split()
+            if len(parts) >= 2:
+                try:
+                    strikes.append({"lat": float(parts[0]), "lon": float(parts[1])})
+                except ValueError:
+                    pass
+
+        return {
+            "lat": lat, "lon": lon,
+            "hours_back": hours_back,
+            "strike_count": len(strikes),
+            "strikes": strikes[:200],
+            "source": "FMI open data WFS – lightning",
+            "license": "CC BY 4.0",
+        }
+    except Exception as exc:
+        return {"error": str(exc), "lat": lat, "lon": lon, "strike_count": 0}
