@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  toolhub:
+    build: ./toolhub
+    ports:
+      - "8001:8001"
+    env_file: ./toolhub/.env
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    env_file: ./api/.env
+    environment:
+      - TOOLHUB_URL=http://toolhub:8001
+    depends_on:
+      - toolhub
+    restart: unless-stopped

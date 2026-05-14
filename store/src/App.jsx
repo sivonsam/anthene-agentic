@@ -1,0 +1,368 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useMsal, useIsAuthenticated } from '@azure/msal-react'
+import { loginRequest, DEV_MODE } from './config'
+import { createApiClient } from './api'
+import AgentCard from './components/AgentCard'
+import AgentPreview from './components/AgentPreview'
+import AdminTable from './components/AdminTable'
+import { ToastContainer } from './components/Toast'
+
+const CATEGORIES = ['Kaikki', 'Security', 'Environmental', 'Logistics', 'Intelligence', 'Custom']
+const CATEGORY_VALUES = { 'Kaikki': '', 'Security': 'security', 'Environmental': 'environmental', 'Logistics': 'logistics', 'Intelligence': 'intelligence', 'Custom': 'custom' }
+
+const SORT_OPTIONS = [
+  { label: 'Uusimmat', value: 'newest' },
+  { label: 'Nimi A–Z', value: 'name' },
+  { label: 'Eniten työkaluja', value: 'tools' },
+]
+
+const VIEWS = ['Kauppa', 'Omat', 'Admin']
+
+let toastIdCounter = 0
+
+export default function App() {
+  const { instance, accounts } = useMsal()
+  const isAuthenticated = useIsAuthenticated()
+
+  const [view, setView] = useState('Kauppa')
+  const [storeAgents, setStoreAgents] = useState([])
+  const [myAgents, setMyAgents] = useState([])
+  const [allAgents, setAllAgents] = useState([])
+  const [user, setUser] = useState(null)
+  const [loadingStore, setLoadingStore] = useState(false)
+  const [loadingMy, setLoadingMy] = useState(false)
+  const [loadingAdmin, setLoadingAdmin] = useState(false)
+
+  const [search, setSearch] = useState('')
+  const [category, setCategory] = useState('Kaikki')
+  const [sort, setSort] = useState('newest')
+  const [previewAgent, setPreviewAgent] = useState(null)
+  const [toasts, setToasts] = useState([])
+
+  const isLoggedIn = DEV_MODE || isAuthenticated
+
+  const getToken = useCallback(async () => {
+    if (DEV_MODE) return 'dev'
+    const resp = await instance.acquireTokenSilent({ ...loginRequest, account: accounts[0] })
+    return resp.accessToken
+  }, [instance, accounts])
+
+  const api = useMemo(() => createApiClient(getToken), [getToken])
+
+  const addToast = (message, type = 'success') => {
+    const id = ++toastIdCounter
+    setToasts(t => [...t, { id, message, type }])
+  }
+  const dismissToast = (id) => setToasts(t => t.filter(x => x.id !== id))
+
+  // Load user info
+  useEffect(() => {
+    if (!isLoggedIn) return
+    if (DEV_MODE) {
+      setUser({ name: 'Dev User', role: 'admin', sub: 'dev-user-1' })
+      return
+    }
+    api.getMe().then(setUser).catch(() => {
+      const acc = accounts[0]
+      setUser({ name: acc?.name || 'Käyttäjä', role: 'user' })
+    })
+  }, [isLoggedIn])
+
+  // Load store agents
+  const loadStore = useCallback(async () => {
+    setLoadingStore(true)
+    try {
+      const agents = await api.listStoreAgents()
+      setStoreAgents(agents)
+    } catch (e) {
+      addToast(`Virhe: ${e.message}`, 'error')
+    }
+    setLoadingStore(false)
+  }, [api])
+
+  // Load my agents
+  const loadMy = useCallback(async () => {
+    setLoadingMy(true)
+    try {
+      const agents = await api.listMyAgents()
+      setMyAgents(agents)
+    } catch (e) {
+      addToast(`Virhe: ${e.message}`, 'error')
+    }
+    setLoadingMy(false)
+  }, [api])
+
+  // Load all agents (admin)
+  const loadAll = useCallback(async () => {
+    setLoadingAdmin(true)
+    try {
+      const agents = await api.listAllAgents()
+      setAllAgents(agents)
+    } catch (e) {
+      addToast(`Virhe: ${e.message}`, 'error')
+    }
+    setLoadingAdmin(false)
+  }, [api])
+
+  useEffect(() => { if (isLoggedIn) { loadStore(); loadMy() } }, [isLoggedIn])
+  useEffect(() => { if (view === 'Admin' && isLoggedIn) loadAll() }, [view, isLoggedIn])
+
+  const handleLogin = () => instance.loginPopup(loginRequest).catch(() => {})
+  const handleLogout = () => instance.logoutPopup().catch(() => {})
+
+  const handleCopy = async (agent) => {
+    try {
+      await api.copyAgent(agent.id)
+      await loadMy()
+      addToast(`✅ "${agent.name}" lisätty omiin agentteihin!`, 'success')
+      setPreviewAgent(null)
+    } catch (e) {
+      addToast(`Virhe: ${e.message}`, 'error')
+    }
+  }
+
+  const handleDeleteAdmin = async (agent) => {
+    if (!confirm(`Poistetaanko agentti "${agent.name}" pysyvästi?`)) return
+    try {
+      await api.deleteAgent(agent.id)
+      setAllAgents(a => a.filter(x => x.id !== agent.id))
+      addToast(`Agentti "${agent.name}" poistettu.`, 'success')
+    } catch (e) {
+      addToast(`Virhe: ${e.message}`, 'error')
+    }
+  }
+
+  const handleChangeVisibility = async (agent, newVisibility) => {
+    try {
+      await api.updateAgent(agent.id, { visibility: newVisibility })
+      setAllAgents(a => a.map(x => x.id === agent.id ? { ...x, visibility: newVisibility } : x))
+      addToast(`Näkyvyys päivitetty: ${agent.name}`, 'success')
+    } catch (e) {
+      addToast(`Virhe: ${e.message}`, 'error')
+    }
+  }
+
+  const handleRunTest = (agent) => (message, onToken, onToolStart, onToolEnd, onDone, onError) => {
+    api.runAgentStream(agent.id, message, `store:${agent.id}`,
+      onToken, onToolStart, onToolEnd, onDone, onError, getToken)
+  }
+
+  // Filter + sort logic
+  const applyFilters = (agents) => {
+    let result = [...agents]
+    const q = search.toLowerCase().trim()
+    if (q) {
+      result = result.filter(a =>
+        a.name?.toLowerCase().includes(q) ||
+        a.description?.toLowerCase().includes(q) ||
+        a.category?.toLowerCase().includes(q)
+      )
+    }
+    const catVal = CATEGORY_VALUES[category]
+    if (catVal) {
+      result = result.filter(a => a.category === catVal)
+    }
+    if (sort === 'newest') {
+      result.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    } else if (sort === 'name') {
+      result.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fi'))
+    } else if (sort === 'tools') {
+      result.sort((a, b) => (b.tools?.length || 0) - (a.tools?.length || 0))
+    }
+    return result
+  }
+
+  const filteredStore = useMemo(() => applyFilters(storeAgents), [storeAgents, search, category, sort])
+  const filteredMy = useMemo(() => applyFilters(myAgents), [myAgents, search, category, sort])
+
+  const isAdmin = user?.role === 'admin'
+
+  const SearchBar = () => (
+    <div className="store-search-bar">
+      <div className="search-input-wrap">
+        <span className="search-icon">🔍</span>
+        <input
+          className="search-input"
+          type="text"
+          placeholder="Hae nimellä, kuvauksella tai kategorialla…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && (
+          <button className="search-clear" onClick={() => setSearch('')} title="Tyhjennä haku">✕</button>
+        )}
+      </div>
+
+      <div className="category-chips">
+        {CATEGORIES.map(cat => (
+          <button
+            key={cat}
+            className={`category-chip ${category === cat ? 'active' : ''}`}
+            onClick={() => setCategory(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      <select
+        className="sort-select"
+        value={sort}
+        onChange={e => setSort(e.target.value)}
+      >
+        {SORT_OPTIONS.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  )
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <div className="header-brand">
+          <span className="brand-hex">⬡</span>
+          <span className="brand-name">Anthene</span>
+          <span className="brand-product">AgentStore</span>
+        </div>
+        <nav className="header-nav">
+          {VIEWS.filter(v => v !== 'Admin' || isAdmin).map(v => (
+            <button
+              key={v}
+              className={`nav-btn ${view === v ? 'active' : ''}`}
+              onClick={() => { setPreviewAgent(null); setView(v) }}
+            >
+              {v === 'Kauppa' ? '🏪' : v === 'Omat' ? '🤖' : '🛡️'} {v}
+            </button>
+          ))}
+        </nav>
+        <div className="header-user">
+          {isLoggedIn ? (
+            <>
+              <span className="user-name">{user?.name || 'Käyttäjä'}</span>
+              {isAdmin && <span className="admin-badge">Admin</span>}
+              {!DEV_MODE && <button className="btn-logout" onClick={handleLogout}>Kirjaudu ulos</button>}
+              {DEV_MODE && <span className="dev-badge">DEV</span>}
+            </>
+          ) : (
+            <button className="btn-login" onClick={handleLogin}>Kirjaudu sisään</button>
+          )}
+        </div>
+      </header>
+
+      <main className="app-main">
+        {!isLoggedIn ? (
+          <div className="login-wall">
+            <div className="login-card">
+              <span className="login-hex">⬡</span>
+              <h1>Anthene AgentStore</h1>
+              <p>Selaa ja ota käyttöön jaettuja AI-agentteja.<br/>Kirjaudu sisään jatkaaksesi.</p>
+              <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ── Kauppa ── */}
+            {view === 'Kauppa' && (
+              <section className="view">
+                <div className="view-toolbar">
+                  <h2>🏪 Kauppa <span className="count-badge">{filteredStore.length}</span></h2>
+                </div>
+                <SearchBar />
+                {loadingStore ? (
+                  <div className="spinner">Ladataan agentteja…</div>
+                ) : filteredStore.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">🏪</div>
+                    <h3>{search || category !== 'Kaikki' ? 'Ei tuloksia' : 'Kauppa on tyhjä'}</h3>
+                    <p>{search || category !== 'Kaikki' ? 'Kokeile eri hakusanoja tai kategorioita.' : 'Ei jaettuja agentteja saatavilla.'}</p>
+                    {(search || category !== 'Kaikki') && (
+                      <button className="btn-secondary" onClick={() => { setSearch(''); setCategory('Kaikki') }}>
+                        Tyhjennä suodattimet
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="agents-grid">
+                    {filteredStore.map(a => (
+                      <AgentCard
+                        key={a.id}
+                        agent={a}
+                        showOwner
+                        onPreview={ag => setPreviewAgent(ag)}
+                        onCopy={handleCopy}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ── Omat ── */}
+            {view === 'Omat' && (
+              <section className="view">
+                <div className="view-toolbar">
+                  <h2>🤖 Omat agentit <span className="count-badge">{filteredMy.length}</span></h2>
+                </div>
+                <SearchBar />
+                {loadingMy ? (
+                  <div className="spinner">Ladataan…</div>
+                ) : filteredMy.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">🤖</div>
+                    <h3>{search || category !== 'Kaikki' ? 'Ei tuloksia' : 'Ei omia agentteja'}</h3>
+                    <p>{search || category !== 'Kaikki' ? 'Kokeile eri hakusanoja.' : 'Ota käyttöön agentteja Kaupasta.'}</p>
+                    {!(search || category !== 'Kaikki') && (
+                      <button className="btn-primary" onClick={() => setView('Kauppa')}>
+                        Selaa Kauppaa
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="agents-grid">
+                    {filteredMy.map(a => (
+                      <AgentCard
+                        key={a.id}
+                        agent={a}
+                        onPreview={ag => setPreviewAgent(ag)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ── Admin ── */}
+            {view === 'Admin' && isAdmin && (
+              <section className="view">
+                <div className="view-toolbar">
+                  <h2>🛡️ Admin — kaikki agentit <span className="count-badge">{allAgents.length}</span></h2>
+                  <button className="btn-secondary" onClick={loadAll}>🔄 Päivitä</button>
+                </div>
+                <AdminTable
+                  agents={allAgents}
+                  loading={loadingAdmin}
+                  onChangeVisibility={handleChangeVisibility}
+                  onDelete={handleDeleteAdmin}
+                />
+              </section>
+            )}
+          </>
+        )}
+      </main>
+
+      {/* Slide-in preview panel */}
+      {previewAgent && (
+        <AgentPreview
+          agent={previewAgent}
+          onClose={() => setPreviewAgent(null)}
+          onRun={handleRunTest(previewAgent)}
+          onCopy={view === 'Kauppa' ? handleCopy : undefined}
+        />
+      )}
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+    </div>
+  )
+}
