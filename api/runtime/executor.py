@@ -51,7 +51,7 @@ def _make_llm(model_name: str) -> AzureChatOpenAI:
 
 async def _fetch_tool_list() -> list[dict]:
     """Fetch available tools from Tool Hub."""
-    async with httpx.AsyncClient(timeout=5) as client:
+    async with httpx.AsyncClient(timeout=10, follow_redirects=True, verify=False) as client:
         resp = await client.get(f"{TOOLHUB_URL}/tools")
         resp.raise_for_status()
         return resp.json()
@@ -66,7 +66,7 @@ def _build_lc_tool(tool_meta: dict) -> object:
     @lc_tool(tool_name)
     async def dynamic_tool(**kwargs) -> str:
         f"""Call {tool_name} via Anthene Tool Hub. {tool_desc}"""
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True, verify=False) as client:
             resp = await client.post(
                 f"{TOOLHUB_URL}/tools/call/{tool_id}",
                 json={"args": kwargs},
