@@ -1,664 +1,93 @@
 """
 Tool Registry — maps tool IDs to async functions + metadata.
 
-Each open-data tool includes:
-  avoindata_category : avoindata.suomi.fi category slug
-  source_org         : data provider organisation
-  license            : data license
-  avoindata_url      : link to avoindata.suomi.fi listing (if available)
-  open_data          : True = publicly available, no commercial key needed by default
+Only tools verified to work from Azure Container Apps (Sweden Central) are registered.
+Removed tools that were non-functional:
+  - ADS-B Exchange specific tools (adsb_military, adsb_emergency, adsb_by_*, aircraft_trail,
+    aircraft_detail) — API key not subscribed to these endpoints (403)
+  - EFFIS fires — Copernicus WFS blocks Azure IPs
+  - STUK radiation — HTTP 404 (API endpoint removed)
+  - FMI warnings — HTTP 400 (WFS query parameters changed)
+  - Gas storage (AGSI) — 301 redirect (API URL changed, no follow)
+  - NASA FIRMS fires — FIRMS_MAP_KEY not configured
+  - Fingrid — FINGRID_API_KEY not configured
+  - ENTSO-E — ENTSOE_API_KEY not configured
+  - Azure Maps geocode — AZURE_MAPS_KEY not configured
+  - Sanctions check — crashes (missing external config)
+  - File read — Blob Storage not configured
+  - Telegram notify — TELEGRAM_BOT_TOKEN not configured
+  - OpenSky aircraft (icao24 lookup) — OpenSky direct blocked from Azure
+  - Vessel detail — Digitraffic /locations/{mmsi} returns 404
 """
 
-from tools.adsb import (
-    adsb_area, adsb_military, adsb_emergency,
-    adsb_by_registration, adsb_by_callsign, adsb_by_squawk, adsb_by_type,
-    aircraft_trail, aircraft_detail,
-)
-from tools.effis import effis_fires
+from tools.adsb import adsb_area
+from tools.opensky import opensky_area
+from tools.fmi import fmi_weather_observations as fmi_observations, fmi_lightning
 from tools.weather import weather_area
-from tools.map_tools import map_geocode
-from tools.web_search import web_search
-from tools.file_handler import file_read
-from tools.telegram import telegram_notify
-from tools.calculator import calculator
-from tools.fmi import fmi_weather_observations, fmi_warnings, fmi_lightning
-from tools.analysis import detect_clusters, correlate_events
-from tools.sanctions import sanctions_check_vessel, sanctions_check_entity
-from tools.fingrid import fingrid_grid_status, fingrid_disturbances
 from tools.gdacs import gdacs_alerts
-from tools.opensky import opensky_area, opensky_aircraft
-from tools.stuk import stuk_radiation
-from tools.firms import firms_fires
-from tools.entsoe import entsoe_load, entsoe_generation_outages
-from tools.gas_storage import gas_storage
-from tools.vessels import vessels_area, vessels_bbox, vessel_detail
+from tools.vessels import vessels_area, vessels_bbox
+from tools.web_search import web_search
+from tools.calculator import calculator
+from tools.analysis import detect_clusters, correlate_events
 
 TOOL_REGISTRY: dict[str, dict] = {
     # ── Air traffic ──────────────────────────────────────────
     "adsb_area": {
         "fn": adsb_area,
         "name": "ADS-B Area Query",
-        "description": "Live aircraft within radius from a location. Returns type, callsign, military status. (ADS-B Exchange)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "dist_nm": {"type": "number", "description": "Radius in nautical miles"}},
+        "description": (
+            "Live aircraft within radius from a location. Returns callsign, type, altitude, "
+            "speed, heading, squawk alerts. Data from Anthene Light cache (OpenSky + ADS-B Exchange, "
+            "updates every 30s). Fallback: airplanes.live."
+        ),
+        "parameters": {
+            "lat": {"type": "number", "description": "Center latitude"},
+            "lon": {"type": "number", "description": "Center longitude"},
+            "dist_nm": {"type": "number", "description": "Radius in nautical miles (default 50, max 250)"},
+        },
         "avoindata_category": "liikenne",
         "avoindata_category_label": "Liikenne",
-        "source_org": "ADS-B Exchange / OpenSky Network",
-        "license": "CC BY (OpenSky); kaupallinen (ADS-B Exchange)",
+        "source_org": "OpenSky Network / ADS-B Exchange (via Anthene cache)",
+        "license": "CC BY (OpenSky); open (airplanes.live)",
         "open_data": True,
         "avoindata_url": "https://avoindata.suomi.fi/data/fi/group/liikenne",
-    },
-    "adsb_military": {
-        "fn": adsb_military,
-        "name": "Global Military Aircraft",
-        "description": "All currently tracked military aircraft globally. (ADS-B Exchange)",
-        "parameters": {},
-        "avoindata_category": "oikeus-oikeysjarjestelma-ja-yleinen-turvallisuus",
-        "avoindata_category_label": "Oikeus ja yleinen turvallisuus",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain vaaditaan",
-        "open_data": False,
-        "avoindata_url": None,
-    },
-    "aircraft_trail": {
-        "fn": aircraft_trail,
-        "name": "Aircraft Trail by Hex",
-        "description": "Recent flight trail (positions over time) for a specific aircraft by ICAO24 hex. (ADS-B Exchange)",
-        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex identifier (e.g. 4601f4)"}},
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "aircraft_detail": {
-        "fn": aircraft_detail,
-        "name": "Aircraft Detail by Hex",
-        "description": "Current position and full details for a specific aircraft by ICAO24 hex. Includes operator, nav state, signal quality. (ADS-B Exchange)",
-        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex identifier"}},
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_emergency": {
-        "fn": adsb_emergency,
-        "name": "Emergency Aircraft (7700/7600/7500)",
-        "description": "All aircraft globally squawking emergency codes: 7700 general emergency, 7600 radio failure, 7500 hijack. Real-time incident awareness. (ADS-B Exchange)",
-        "parameters": {},
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_registration": {
-        "fn": adsb_by_registration,
-        "name": "Aircraft by Registration",
-        "description": "Find aircraft by tail number / registration (e.g. OH-LVL, N12345). Returns current position. (ADS-B Exchange)",
-        "parameters": {"registration": {"type": "string", "description": "Aircraft tail number e.g. OH-LVL"}},
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_callsign": {
-        "fn": adsb_by_callsign,
-        "name": "Aircraft by Callsign",
-        "description": "Find aircraft by flight callsign (e.g. FIN123, BAW456). Returns current position and details. (ADS-B Exchange)",
-        "parameters": {"callsign": {"type": "string", "description": "Flight callsign e.g. FIN123"}},
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_squawk": {
-        "fn": adsb_by_squawk,
-        "name": "Aircraft by Squawk Code",
-        "description": "Find all aircraft squawking a specific transponder code. 7700=emergency, 7600=radio failure, 7500=hijack. (ADS-B Exchange)",
-        "parameters": {"squawk": {"type": "string", "description": "4-digit squawk code e.g. 7700"}},
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_type": {
-        "fn": adsb_by_type,
-        "name": "Aircraft by ICAO Type",
-        "description": "All currently airborne aircraft of a specific ICAO type code (e.g. B738, A320, F16, UH60). Fleet monitoring. (ADS-B Exchange)",
-        "parameters": {"icao_type": {"type": "string", "description": "ICAO aircraft type code e.g. B738"}},
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
     },
     "opensky_area": {
         "fn": opensky_area,
         "name": "OpenSky Aircraft Area",
-        "description": "Free ADS-B aircraft tracking. Live aircraft within radius. Alternative to ADS-B Exchange. (OpenSky Network)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "radius_km": {"type": "number"}},
+        "description": (
+            "Free ADS-B aircraft tracking via airplanes.live. Live aircraft within radius. "
+            "Returns callsign, hex, altitude, speed, track. Use adsb_area for richer cached data."
+        ),
+        "parameters": {
+            "lat": {"type": "number", "description": "Center latitude"},
+            "lon": {"type": "number", "description": "Center longitude"},
+            "radius_km": {"type": "number", "description": "Search radius in kilometers (default 200)"},
+        },
         "avoindata_category": "liikenne",
         "avoindata_category_label": "Liikenne",
-        "source_org": "OpenSky Network",
-        "license": "CC BY 4.0",
+        "source_org": "airplanes.live / OpenSky Network",
+        "license": "CC BY 4.0 (OpenSky)",
         "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/group/liikenne",
+        "avoindata_url": "https://opensky-network.org/",
     },
-    "opensky_aircraft": {
-        "fn": opensky_aircraft,
-        "name": "OpenSky Single Aircraft",
-        "description": "Current state of a specific aircraft by ICAO24 hex address.",
-        "parameters": {"icao24": {"type": "string"}},
-        "avoindata_category": "liikenne",
-        "avoindata_category_label": "Liikenne",
-        "source_org": "OpenSky Network",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/group/liikenne",
-    },
-    # ── Weather & environment ─────────────────────────────────
-    "fmi_observations": {
-        "fn": fmi_weather_observations,
-        "name": "FMI Weather Observations",
-        "description": "Finnish Meteorological Institute live weather observations near a location. Temperature, wind, pressure, snow. Free, no auth.",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "hours_back": {"type": "integer"}},
-        "avoindata_category": "ymparisto",
-        "avoindata_category_label": "Ympäristö",
-        "source_org": "Ilmatieteen laitos (FMI)",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/dataset?q=ilmatieteen+laitos",
-    },
-    "fmi_warnings": {
-        "fn": fmi_warnings,
-        "name": "FMI Weather Warnings",
-        "description": "Active weather warnings from Finnish Meteorological Institute. Storms, icing, flooding.",
-        "parameters": {"region": {"type": "string"}},
-        "avoindata_category": "ymparisto",
-        "avoindata_category_label": "Ympäristö",
-        "source_org": "Ilmatieteen laitos (FMI)",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/dataset?q=ilmatieteen+laitos",
-    },
-    "fmi_lightning": {
-        "fn": fmi_lightning,
-        "name": "FMI Lightning Observations",
-        "description": "Lightning strike detections near a location from FMI open data. Covers Finland and surrounding seas.",
-        "parameters": {
-            "lat": {"type": "number"},
-            "lon": {"type": "number"},
-            "hours_back": {"type": "integer", "description": "Hours back to search (1-6)"},
-        },
-        "source_org": "Ilmatieteen laitos (FMI)",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/dataset?q=ilmatieteen+laitos",
-    },
-    "weather_area": {
-        "fn": weather_area,
-        "name": "Weather (Open-Meteo)",
-        "description": "Current weather conditions for any coordinates. Free, global coverage. (Open-Meteo)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}},
-        "avoindata_category": "ymparisto",
-        "avoindata_category_label": "Ympäristö",
-        "source_org": "Open-Meteo (ERA5 / DWD / ECMWF)",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": None,
-    },
-    # ── Wildfires ─────────────────────────────────────────────
-    "effis_fires": {
-        "fn": effis_fires,
-        "name": "EFFIS Active Fires (EU)",
-        "description": "Active wildfire alerts from EU EFFIS. European coverage. Optionally filter by country.",
-        "parameters": {"country": {"type": "string"}, "days": {"type": "integer"}},
-        "avoindata_category": "ymparisto",
-        "avoindata_category_label": "Ympäristö",
-        "source_org": "European Forest Fire Information System (EFFIS / JRC)",
-        "license": "Avoin EU (EUPL)",
-        "open_data": True,
-        "avoindata_url": None,
-    },
-    "firms_fires": {
-        "fn": firms_fires,
-        "name": "NASA FIRMS Active Fires",
-        "description": "NASA satellite fire detections globally. VIIRS + MODIS sensors. More global coverage than EFFIS.",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "area_km": {"type": "number"}, "days": {"type": "integer"}, "country_iso": {"type": "string"}},
-        "avoindata_category": "ymparisto",
-        "avoindata_category_label": "Ympäristö",
-        "source_org": "NASA FIRMS (VIIRS/MODIS)",
-        "license": "Julkinen (NASA Open Data)",
-        "open_data": True,
-        "avoindata_url": None,
-    },
-    # ── Energy infrastructure ─────────────────────────────────
-    "fingrid_status": {
-        "fn": fingrid_grid_status,
-        "name": "Fingrid Grid Status (Finland)",
-        "description": "Real-time Finnish electricity grid: consumption, production, wind, nuclear, hydro, frequency. (Fingrid — requires free API key)",
-        "parameters": {},
-        "avoindata_category": "energia",
-        "avoindata_category_label": "Energia",
-        "source_org": "Fingrid Oyj",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/dataset?q=fingrid",
-    },
-    "fingrid_disturbances": {
-        "fn": fingrid_disturbances,
-        "name": "Fingrid Grid Disturbances",
-        "description": "Recent electricity grid disturbance events in Finland.",
-        "parameters": {"hours_back": {"type": "integer"}},
-        "avoindata_category": "energia",
-        "avoindata_category_label": "Energia",
-        "source_org": "Fingrid Oyj",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/dataset?q=fingrid",
-    },
-    "entsoe_load": {
-        "fn": entsoe_load,
-        "name": "ENTSO-E Electricity Load",
-        "description": "European electricity grid load (consumption) by country. Covers FI, SE, NO, DK, DE, etc. (ENTSO-E — requires free API key)",
-        "parameters": {"country": {"type": "string", "description": "ISO2 country code"}, "hours_back": {"type": "integer"}},
-        "avoindata_category": "energia",
-        "avoindata_category_label": "Energia",
-        "source_org": "ENTSO-E (European Network of Transmission System Operators)",
-        "license": "Avoin (ENTSO-E rekisteröinti)",
-        "open_data": True,
-        "avoindata_url": None,
-    },
-    "entsoe_outages": {
-        "fn": entsoe_generation_outages,
-        "name": "ENTSO-E Generation Outages",
-        "description": "Planned power generation outages and shutdowns in European countries next 7 days.",
-        "parameters": {"country": {"type": "string"}},
-        "avoindata_category": "energia",
-        "avoindata_category_label": "Energia",
-        "source_org": "ENTSO-E",
-        "license": "Avoin (ENTSO-E rekisteröinti)",
-        "open_data": True,
-        "avoindata_url": None,
-    },
-    "gas_storage": {
-        "fn": gas_storage,
-        "name": "EU Gas Storage Levels",
-        "description": "European natural gas storage fill levels by country or EU aggregate. Fill %, daily trend. Free, no auth. (GIE AGSI+)",
-        "parameters": {"country": {"type": "string", "description": "ISO2 or 'EU'"}, "days_back": {"type": "integer"}},
-        "avoindata_category": "energia",
-        "avoindata_category_label": "Energia",
-        "source_org": "Gas Infrastructure Europe (GIE AGSI+)",
-        "license": "Avoin (GIE)",
-        "open_data": True,
-        "avoindata_url": None,
-    },
-    # ── Radiation ─────────────────────────────────────────────
-    "stuk_radiation": {
-        "fn": stuk_radiation,
-        "name": "STUK Radiation Monitoring",
-        "description": "Finnish radiation dose rate readings from STUK monitoring network. Alert threshold: >0.5 µSv/h.",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}},
-        "avoindata_category": "terveys",
-        "avoindata_category_label": "Terveys",
-        "source_org": "Säteilyturvakeskus (STUK)",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/dataset?q=stuk+s%C3%A4teily",
-    },
-    # ── Disaster alerts ───────────────────────────────────────
-    "gdacs_alerts": {
-        "fn": gdacs_alerts,
-        "name": "GDACS Disaster Alerts",
-        "description": "Global Disaster Alert and Coordination System. Earthquakes, floods, cyclones, volcanoes. Free RSS/JSON. (GDACS/UN)",
-        "parameters": {"alert_level": {"type": "string", "description": "Red|Orange|Green or null for all"}, "event_type": {"type": "string", "description": "EQ|TC|FL|VO|WF or null"}, "limit": {"type": "integer"}},
-        "avoindata_category": "oikeus-oikeysjarjestelma-ja-yleinen-turvallisuus",
-        "avoindata_category_label": "Oikeus ja yleinen turvallisuus",
-        "source_org": "GDACS / UN OCHA",
-        "license": "Julkinen (UN Open Data)",
-        "open_data": True,
-        "avoindata_url": None,
-    },
-    # ── Geospatial ────────────────────────────────────────────
-    "map_geocode": {
-        "fn": map_geocode,
-        "name": "Geocode Address",
-        "description": "Convert place name or address to coordinates. Uses Azure Maps or Nominatim fallback.",
-        "parameters": {"query": {"type": "string"}},
-        "avoindata_category": "alueet-ja-kaupungit",
-        "avoindata_category_label": "Alueet ja kaupungit",
-        "source_org": "Nominatim / OpenStreetMap",
-        "license": "ODbL (OpenStreetMap)",
-        "open_data": True,
-        "avoindata_url": "https://avoindata.suomi.fi/data/fi/group/alueet-ja-kaupungit",
-    },
-    # ── Web & files ───────────────────────────────────────────
-    "web_search": {
-        "fn": web_search,
-        "name": "Web Search",
-        "description": "Search the web with Bing or DuckDuckGo fallback.",
-        "parameters": {"query": {"type": "string"}},
-        "open_data": False,
-    },
-    "file_read": {
-        "fn": file_read,
-        "name": "Read Uploaded File",
-        "description": "Read content of a previously uploaded file.",
-        "parameters": {"file_id": {"type": "string"}},
-        "open_data": False,
-    },
-    # ── Notifications ─────────────────────────────────────────
-    "telegram_notify": {
-        "fn": telegram_notify,
-        "name": "Telegram Notification",
-        "description": "Send a message to the Anthene Telegram channel.",
-        "parameters": {"message": {"type": "string"}},
-        "open_data": False,
-    },
-    # ── Utilities ─────────────────────────────────────────────
-    "calculator": {
-        "fn": calculator,
-        "name": "Calculator",
-        "description": "Safely evaluate a mathematical expression. Supports sqrt, sin, cos, log, etc.",
-        "parameters": {"expression": {"type": "string"}},
-        "open_data": False,
-    },
-    # ── Spatial Analysis ──────────────────────────────────────
-    "detect_clusters": {
-        "fn": detect_clusters,
-        "name": "Detect Spatial Clusters",
-        "description": "DBSCAN-style spatial clustering of geolocated items (vessels, aircraft, etc.).",
-        "parameters": {
-            "items_json": {"type": "string", "description": "JSON array of objects with lat/lon"},
-            "eps_km": {"type": "number"},
-            "min_points": {"type": "integer"},
-        },
-        "open_data": True,
-    },
-    "correlate_events": {
-        "fn": correlate_events,
-        "name": "Correlate Events",
-        "description": "Correlate two sets of geolocated events by spatial proximity.",
-        "parameters": {
-            "primary_json": {"type": "string"},
-            "secondary_json": {"type": "string"},
-            "time_window_minutes": {"type": "integer"},
-            "distance_km": {"type": "number"},
-        },
-        "open_data": True,
-    },
-    # ── Sanctions ─────────────────────────────────────────────
-    "sanctions_vessel": {
-        "fn": sanctions_check_vessel,
-        "name": "Sanctions Check (Vessel)",
-        "description": "Check vessel against international sanctions lists (UN, EU, US OFAC, UK). (OpenSanctions)",
-        "parameters": {
-            "query": {"type": "string", "description": "Vessel name, MMSI or IMO number"},
-            "fuzzy": {"type": "boolean"},
-        },
-        "open_data": True,
-    },
-    "sanctions_entity": {
-        "fn": sanctions_check_entity,
-        "name": "Sanctions Check (Entity)",
-        "description": "Check company or person against international sanctions lists. (OpenSanctions)",
-        "parameters": {
-            "query": {"type": "string"},
-            "schema": {"type": "string", "description": "LegalEntity, Person or Organization"},
-        },
-        "open_data": True,
-    },
-}
-
-
-
-# Tool category taxonomy — used in Creator UI grouping and Store catalog
-# Each tool has: category (slug) + category_label (Finnish display name with emoji)
-TOOL_CATEGORIES = {
-    "ilmailu":      "🛫 Ilmailu",
-    "meri":         "⚓ Meri & Vesiväylät",
-    "saa":          "🌦 Sää & Ilmasto",
-    "ymparisto":    "🌿 Ympäristö & Tulipalot",
-    "katastrofit":  "🌋 Katastrofit & Hälytykset",
-    "energia":      "⚡ Energia & Verkot",
-    "saateily":     "☢️ Säteily & CBRN",
-    "paikkatiedot": "📍 Paikkatiedot & Kartat",
-    "tiedustelu":   "🔍 Tiedustelu & Analytiikka",
-    "viestinta":    "📢 Viestintä",
-}
-
-TOOL_REGISTRY: dict[str, dict] = {
-    # ── 🛫 Ilmailu ────────────────────────────────────────────
-    "adsb_area": {
-        "fn": adsb_area,
-        "name": "ADS-B Area Query",
-        "description": "Live aircraft within radius from a location. Returns type, callsign, military status. (ADS-B Exchange)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "dist_nm": {"type": "number", "description": "Radius in nautical miles"}},
-        "category": "ilmailu",
-        "category_label": "🛫 Ilmailu",
-    },
-    "adsb_military": {
-        "fn": adsb_military,
-        "name": "Global Military Aircraft",
-        "description": "All currently tracked military aircraft globally. (ADS-B Exchange)",
-        "parameters": {},
-        "category": "ilmailu",
-        "category_label": "🛫 Ilmailu",
-    },
-    "aircraft_trail": {
-        "fn": aircraft_trail,
-        "name": "Lentokoneen reitti (hex)",
-        "description": "Yksittäisen lentokoneen lentoreitti ICAO24 hex-koodilla. Palauttaa peräkkäiset sijaintipisteet, korkeuden ja nopeuden. (ADS-B Exchange)",
-        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex-tunniste (esim. 4601f4)"}},
-        "category": "ilmailu",
-        "category_label": "✈️ Ilmaliikenne",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "aircraft_detail": {
-        "fn": aircraft_detail,
-        "name": "Lentokone (hex-haku)",
-        "description": "Yksittäisen lentokoneen reaaliaikainen sijainti ja tiedot ICAO24 hex-koodilla. Sisältää operaattorin, nav-tilan, signaalin. (ADS-B Exchange)",
-        "parameters": {"hex_code": {"type": "string", "description": "ICAO24 hex-tunniste"}},
-        "category": "ilmailu",
-        "category_label": "✈️ Ilmaliikenne",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_emergency": {
-        "fn": adsb_emergency,
-        "name": "Hätätila-lentokoneet (7700/7600/7500)",
-        "description": "Kaikki hätäkoodia käyttävät lentokoneet maailmanlaajuisesti: 7700 hätätila, 7600 radiokatko, 7500 kaappaus. (ADS-B Exchange)",
-        "parameters": {},
-        "category": "ilmailu",
-        "category_label": "✈️ Ilmaliikenne",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_registration": {
-        "fn": adsb_by_registration,
-        "name": "Lentokone rekisteritunnuksella",
-        "description": "Etsi lentokonetta rekisteritunnuksella (esim. OH-LVL, N12345). Palauttaa nykyisen sijainnin. (ADS-B Exchange)",
-        "parameters": {"registration": {"type": "string", "description": "Rekisteritunnus esim. OH-LVL"}},
-        "category": "ilmailu",
-        "category_label": "✈️ Ilmaliikenne",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_callsign": {
-        "fn": adsb_by_callsign,
-        "name": "Lentokone callsignilla",
-        "description": "Etsi lentokonetta kutsutunnuksella (esim. FIN123, BAW456). (ADS-B Exchange)",
-        "parameters": {"callsign": {"type": "string", "description": "Kutsutunnus esim. FIN123"}},
-        "category": "ilmailu",
-        "category_label": "✈️ Ilmaliikenne",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_squawk": {
-        "fn": adsb_by_squawk,
-        "name": "Lentokone squawk-koodilla",
-        "description": "Kaikki lentokoneet jotka käyttävät tiettyä transponderikoodia. 7700=hätätila, 7600=radiokatko, 7500=kaappaus. (ADS-B Exchange)",
-        "parameters": {"squawk": {"type": "string", "description": "4-numeroinen squawk-koodi esim. 7700"}},
-        "category": "ilmailu",
-        "category_label": "✈️ Ilmaliikenne",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "adsb_by_type": {
-        "fn": adsb_by_type,
-        "name": "Lentokoneet ICAO-tyypin mukaan",
-        "description": "Kaikki ilmassa olevat tietyn ICAO-tyypin koneet (esim. B738, A320, F16, UH60). Laivueen seuranta. (ADS-B Exchange)",
-        "parameters": {"icao_type": {"type": "string", "description": "ICAO-tyyppikoodi esim. B738"}},
-        "category": "ilmailu",
-        "category_label": "✈️ Ilmaliikenne",
-        "source_org": "ADS-B Exchange",
-        "license": "Kaupallinen API-avain",
-        "open_data": False,
-    },
-    "opensky_area": {
-        "fn": opensky_area,
-        "name": "OpenSky Aircraft Area",
-        "description": "Free ADS-B aircraft tracking. Live aircraft within bbox. No API key needed. (OpenSky Network)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "radius_km": {"type": "number"}},
-        "category": "ilmailu",
-        "category_label": "🛫 Ilmailu",
-    },
-    "opensky_aircraft": {
-        "fn": opensky_aircraft,
-        "name": "OpenSky Single Aircraft",
-        "description": "Current state of a specific aircraft by ICAO24 hex address.",
-        "parameters": {"icao24": {"type": "string"}},
-        "category": "ilmailu",
-        "category_label": "🛫 Ilmailu",
-    },
-    # ── 🌦 Sää & Ilmasto ─────────────────────────────────────
-    "fmi_observations": {
-        "fn": fmi_weather_observations,
-        "name": "FMI Säähavainnot",
-        "description": "Ilmatieteen laitoksen reaaliaikaiset säähavainnot lähimmiltä asemilta. Lämpötila, tuuli, paine, lumi. (FMI)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "hours_back": {"type": "integer"}},
-        "category": "saa",
-        "category_label": "🌦 Sää & Ilmasto",
-    },
-    "fmi_warnings": {
-        "fn": fmi_warnings,
-        "name": "FMI Varoitukset",
-        "description": "Ilmatieteen laitoksen aktiiviset säävaroitukset. Myrskyt, jäätäminen, tulvat. (FMI)",
-        "parameters": {"region": {"type": "string"}},
-        "category": "saa",
-        "category_label": "🌦 Sää & Ilmasto",
-    },
-    "fmi_lightning": {
-        "fn": fmi_lightning,
-        "name": "FMI Salamahavainnot",
-        "description": "Salamahavainnot lähialueelta FMI:n avoimen datan kautta. Kattaa Suomen ja lähimeret. Päivittyy muutaman minuutin välein.",
-        "parameters": {
-            "lat": {"type": "number"},
-            "lon": {"type": "number"},
-            "hours_back": {"type": "integer", "description": "Tunteja taaksepäin (1-6)"},
-        },
-        "category": "saa",
-        "category_label": "🌤️ Sää & Ilmasto",
-        "source_org": "FMI / Ilmatieteen laitos",
-        "license": "CC BY 4.0",
-        "open_data": True,
-        "avoindata_url": "https://www.ilmatieteenlaitos.fi/avoin-data",
-    },
-    "weather_area": {
-        "fn": weather_area,
-        "name": "Sää globaali (Open-Meteo)",
-        "description": "Reaaliaikaiset sääolosuhteet koordinaateista. Ilmainen, globaali kattavuus. (Open-Meteo / ERA5)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}},
-        "category": "saa",
-        "category_label": "🌦 Sää & Ilmasto",
-    },
-    # ── 🌿 Ympäristö & Tulipalot ──────────────────────────────
-    "effis_fires": {
-        "fn": effis_fires,
-        "name": "EFFIS Metsäpalot (EU)",
-        "description": "EU:n EFFIS-järjestelmän aktiiviset metsäpalovaroitukset. Eurooppalainen kattavuus.",
-        "parameters": {"country": {"type": "string"}, "days": {"type": "integer"}},
-        "category": "ymparisto",
-        "category_label": "🌿 Ympäristö & Tulipalot",
-    },
-    "firms_fires": {
-        "fn": firms_fires,
-        "name": "NASA FIRMS Satelliittipalot",
-        "description": "NASA:n satelliittipohjainen tulipalojen havainnointi globaalisti. VIIRS + MODIS. (NASA FIRMS)",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}, "area_km": {"type": "number"}, "days": {"type": "integer"}, "country_iso": {"type": "string"}},
-        "category": "ymparisto",
-        "category_label": "🌿 Ympäristö & Tulipalot",
-    },
-    # ── 🌋 Katastrofit & Hälytykset ───────────────────────────
-    "gdacs_alerts": {
-        "fn": gdacs_alerts,
-        "name": "GDACS Katastrofivaroitukset",
-        "description": "YK:n GDACS-järjestelmän maailmanlaajuiset luonnonkatastrofivaroitukset. Maanjäristykset, tulvat, syklonit, tulivuoret.",
-        "parameters": {"alert_level": {"type": "string", "description": "Red|Orange|Green tai tyhjä kaikki"}, "event_type": {"type": "string", "description": "EQ|TC|FL|VO|WF tai tyhjä"}, "limit": {"type": "integer"}},
-        "category": "katastrofit",
-        "category_label": "🌋 Katastrofit & Hälytykset",
-    },
-    # ── ⚡ Energia & Verkot ───────────────────────────────────
-    "fingrid_status": {
-        "fn": fingrid_grid_status,
-        "name": "Fingrid Sähköverkko (Suomi)",
-        "description": "Suomen sähköverkon reaaliaikatilanne: kulutus, tuotanto, tuuli, ydinvoima, vesivoima, taajuus. (Fingrid)",
-        "parameters": {},
-        "category": "energia",
-        "category_label": "⚡ Energia & Verkot",
-    },
-    "fingrid_disturbances": {
-        "fn": fingrid_disturbances,
-        "name": "Fingrid Häiriöt",
-        "description": "Suomen sähköverkossa viimeaikaiset häiriötapahtumat.",
-        "parameters": {"hours_back": {"type": "integer"}},
-        "category": "energia",
-        "category_label": "⚡ Energia & Verkot",
-    },
-    "entsoe_load": {
-        "fn": entsoe_load,
-        "name": "ENTSO-E Sähkönkulutus (EU)",
-        "description": "Euroopan sähköverkon kulutusdata maittain. Kattaa FI, SE, NO, DK, DE jne. (ENTSO-E)",
-        "parameters": {"country": {"type": "string", "description": "ISO2-maakoodi"}, "hours_back": {"type": "integer"}},
-        "category": "energia",
-        "category_label": "⚡ Energia & Verkot",
-    },
-    "entsoe_outages": {
-        "fn": entsoe_generation_outages,
-        "name": "ENTSO-E Tuotantokatkokset",
-        "description": "Suunnitellut sähköntuotannon katkokset Euroopassa seuraavat 7 vrk. (ENTSO-E)",
-        "parameters": {"country": {"type": "string"}},
-        "category": "energia",
-        "category_label": "⚡ Energia & Verkot",
-    },
-    "gas_storage": {
-        "fn": gas_storage,
-        "name": "EU Kaasun varastotaso",
-        "description": "Euroopan maakaasun varastointiasteet maittain tai EU-aggregaattina. Täyttöaste %, päivittäinen trendi. (GIE AGSI+)",
-        "parameters": {"country": {"type": "string", "description": "ISO2 tai 'EU'"}, "days_back": {"type": "integer"}},
-        "category": "energia",
-        "category_label": "⚡ Energia & Verkot",
-    },
-    # ── ☢️ Säteily & CBRN ────────────────────────────────────
-    "stuk_radiation": {
-        "fn": stuk_radiation,
-        "name": "STUK Säteilymittaukset",
-        "description": "STUK:n valvontaverkon säteilyannokset lähimmiltä mittausasemilta. Hälytystarve yli 0,5 µSv/h.",
-        "parameters": {"lat": {"type": "number"}, "lon": {"type": "number"}},
-        "category": "saateily",
-        "category_label": "☢️ Säteily & CBRN",
-    },
-    # ── ⚓ Meriliikenne & AIS ─────────────────────────────────
+    # ── Maritime ─────────────────────────────────────────────
     "vessels_area": {
         "fn": vessels_area,
         "name": "AIS Alukset (säde)",
-        "description": "Live AIS-aluspaikannus säteen sisällä. Nopeus (sog), kurssi, navigointitila, MMSI. Itämeri ja Suomen rannikko. (Digitraffic, CC BY 4.0)",
+        "description": (
+            "Live AIS vessel positions within a radius. Returns MMSI, speed (SOG), course (COG), "
+            "heading, nav status. Source: Digitraffic Maritime, coverage: Baltic Sea + Finnish coast."
+        ),
         "parameters": {
-            "lat": {"type": "number", "description": "Keskipisteen leveysaste"},
-            "lon": {"type": "number", "description": "Keskipisteen pituusaste"},
-            "radius_nm": {"type": "number", "description": "Hakusäde meripeninkulmissa (oletus 30)"},
-            "min_speed_knots": {"type": "number", "description": "Valinnainen miniminopeus (esim. 0.5 liikkuvat alukset)"},
-            "max_speed_knots": {"type": "number", "description": "Valinnainen maksiminopeus"},
+            "lat": {"type": "number", "description": "Center latitude"},
+            "lon": {"type": "number", "description": "Center longitude"},
+            "radius_nm": {"type": "number", "description": "Radius in nautical miles (default 30)"},
+            "min_speed_knots": {"type": "number", "description": "Optional: filter by minimum speed"},
+            "max_speed_knots": {"type": "number", "description": "Optional: filter by maximum speed"},
         },
-        "category": "meriliikenne",
-        "category_label": "⚓ Meriliikenne & AIS",
+        "avoindata_category": "liikenne",
+        "avoindata_category_label": "Liikenne",
         "source_org": "Digitraffic / Väylävirasto",
         "license": "CC BY 4.0",
         "open_data": True,
@@ -667,134 +96,176 @@ TOOL_REGISTRY: dict[str, dict] = {
     "vessels_bbox": {
         "fn": vessels_bbox,
         "name": "AIS Alukset (alue/AOI)",
-        "description": "Live AIS-aluspaikannus rajatussa suorakulmaisessa alueessa. Sopii AOI-valvonta-agentille. (Digitraffic, CC BY 4.0)",
+        "description": (
+            "Live AIS vessel positions within a bounding box. Returns all vessels in the rectangle. "
+            "Use this with AOI (lat_min/lat_max/lon_min/lon_max) for area monitoring."
+        ),
         "parameters": {
-            "lat_min": {"type": "number", "description": "Alueen eteläinen leveysaste"},
-            "lat_max": {"type": "number", "description": "Alueen pohjoinen leveysaste"},
-            "lon_min": {"type": "number", "description": "Alueen läntinen pituusaste"},
-            "lon_max": {"type": "number", "description": "Alueen itäinen pituusaste"},
-            "min_speed_knots": {"type": "number", "description": "Valinnainen miniminopeus"},
+            "lat_min": {"type": "number"},
+            "lat_max": {"type": "number"},
+            "lon_min": {"type": "number"},
+            "lon_max": {"type": "number"},
+            "min_speed_knots": {"type": "number", "description": "Optional speed filter"},
         },
-        "category": "meriliikenne",
-        "category_label": "⚓ Meriliikenne & AIS",
+        "avoindata_category": "liikenne",
+        "avoindata_category_label": "Liikenne",
         "source_org": "Digitraffic / Väylävirasto",
         "license": "CC BY 4.0",
         "open_data": True,
         "avoindata_url": "https://www.digitraffic.fi/meriliikenne/",
     },
-    "vessel_detail": {
-        "fn": vessel_detail,
-        "name": "AIS Alustiedot (MMSI)",
-        "description": "Yksittäisen aluksen reaaliaikainen sijainti, nopeus, kurssi, aluksen nimi, tyyppi, määränpää MMSI-numerolla. (Digitraffic, CC BY 4.0)",
+    # ── Weather & environment ─────────────────────────────────
+    "fmi_observations": {
+        "fn": fmi_observations,
+        "name": "FMI Säähavainnot",
+        "description": (
+            "Ilmatieteen laitoksen reaaliaikaiset säähavainnot lähimmältä sääasemalta. "
+            "Lämpötila, tuulen nopeus/suunta, kosteus, paine, sade. Päivittyy ~10 min välein."
+        ),
         "parameters": {
-            "mmsi": {"type": "integer", "description": "9-numeroinen MMSI-tunniste"},
+            "lat": {"type": "number", "description": "Latitude"},
+            "lon": {"type": "number", "description": "Longitude"},
+            "hours_back": {"type": "number", "description": "Hours of history (default 1, max 24)"},
         },
-        "category": "meriliikenne",
-        "category_label": "⚓ Meriliikenne & AIS",
-        "source_org": "Digitraffic / Väylävirasto",
+        "avoindata_category": "ymparisto-ja-luonnonvarat",
+        "avoindata_category_label": "Ympäristö",
+        "source_org": "Ilmatieteen laitos (FMI)",
         "license": "CC BY 4.0",
         "open_data": True,
-        "avoindata_url": "https://www.digitraffic.fi/meriliikenne/",
+        "avoindata_url": "https://en.ilmatieteenlaitos.fi/open-data",
     },
-    # ── 📍 Paikkatiedot & Kartat ──────────────────────────────
-    "map_geocode": {
-        "fn": map_geocode,
-        "name": "Geokoodaus",
-        "description": "Muuntaa paikan nimen tai osoitteen koordinaateiksi. Azure Maps tai Nominatim-fallback.",
-        "parameters": {"query": {"type": "string"}},
-        "category": "paikkatiedot",
-        "category_label": "📍 Paikkatiedot & Kartat",
+    "fmi_lightning": {
+        "fn": fmi_lightning,
+        "name": "FMI Salamahavainnot",
+        "description": (
+            "Salamahavainnot lähialueelta FMI:n avoimen datan kautta. "
+            "Palauttaa salaman sijainnin, napaisuuden ja ajankohdan."
+        ),
+        "parameters": {
+            "lat": {"type": "number"},
+            "lon": {"type": "number"},
+            "radius_km": {"type": "number", "description": "Radius in km (default 200)"},
+            "hours_back": {"type": "number", "description": "Hours back (default 2)"},
+        },
+        "avoindata_category": "ymparisto-ja-luonnonvarat",
+        "avoindata_category_label": "Ympäristö",
+        "source_org": "Ilmatieteen laitos (FMI)",
+        "license": "CC BY 4.0",
+        "open_data": True,
+        "avoindata_url": "https://en.ilmatieteenlaitos.fi/open-data",
     },
-    # ── 🔍 Tiedustelu & Analytiikka ───────────────────────────
-    "web_search": {
-        "fn": web_search,
-        "name": "Web-haku",
-        "description": "Hakee tietoa verkosta Bing- tai DuckDuckGo-fallbackilla.",
-        "parameters": {"query": {"type": "string"}, "count": {"type": "integer"}},
-        "category": "tiedustelu",
-        "category_label": "🔍 Tiedustelu & Analytiikka",
+    "weather_area": {
+        "fn": weather_area,
+        "name": "Sää globaali (Open-Meteo)",
+        "description": (
+            "Reaaliaikaiset sääolosuhteet koordinaateista. Lämpötila, kosteus, tuuli, "
+            "sademäärä, pilvisyys. Global coverage, no API key needed."
+        ),
+        "parameters": {
+            "lat": {"type": "number"},
+            "lon": {"type": "number"},
+        },
+        "avoindata_category": "ymparisto-ja-luonnonvarat",
+        "avoindata_category_label": "Ympäristö",
+        "source_org": "Open-Meteo",
+        "license": "CC BY 4.0",
+        "open_data": True,
+        "avoindata_url": "https://open-meteo.com/",
     },
-    "file_read": {
-        "fn": file_read,
-        "name": "Lue tiedosto",
-        "description": "Lukee aiemmin ladatun tiedoston sisällön analysoitavaksi.",
-        "parameters": {"file_id": {"type": "string"}},
-        "category": "tiedustelu",
-        "category_label": "🔍 Tiedustelu & Analytiikka",
+    # ── Disasters & alerts ────────────────────────────────────
+    "gdacs_alerts": {
+        "fn": gdacs_alerts,
+        "name": "GDACS Katastrofivaroitukset",
+        "description": (
+            "YK:n GDACS-järjestelmän maailmanlaajuiset luonnonkatastrofivaroitukset. "
+            "Maanjäristykset, syklonit, tulvat, kuivuudet. Päivittyy jatkuvasti."
+        ),
+        "parameters": {
+            "event_type": {"type": "string", "description": "Filter: EQ=earthquake, TC=cyclone, FL=flood, DR=drought, WF=wildfire"},
+            "min_severity": {"type": "number", "description": "Minimum alert level 1-3"},
+        },
+        "avoindata_category": "ymparisto-ja-luonnonvarat",
+        "avoindata_category_label": "Ympäristö",
+        "source_org": "GDACS / United Nations",
+        "license": "Open (UN)",
+        "open_data": True,
+        "avoindata_url": "https://www.gdacs.org/",
     },
-    "calculator": {
-        "fn": calculator,
-        "name": "Laskin",
-        "description": "Evaluoi matemaattisen lausekkeen turvallisesti. Tukee sqrt, sin, cos, log jne.",
-        "parameters": {"expression": {"type": "string"}},
-        "category": "tiedustelu",
-        "category_label": "🔍 Tiedustelu & Analytiikka",
-    },
-    # ── 🔬 Spatial Analysis ──────────────────────────────────
+    # ── Analysis tools ────────────────────────────────────────
     "detect_clusters": {
         "fn": detect_clusters,
         "name": "Klusterianalyysi",
-        "description": "Havaitsee maantieteelliset klusterit alusten, lentokoneiden tai muiden kohteiden joukosta. Syötteenä JSON-lista lat/lon-koordinaateilla varustetuista kohteista.",
+        "description": (
+            "Havaitsee maantieteelliset klusterit alusten, lentokoneiden tai tapahtumien joukosta. "
+            "Tunnistaa epätavalliset keskittymät ja poikkeamat. Input: list of {lat, lon, ...}."
+        ),
         "parameters": {
-            "items_json": {"type": "string", "description": "JSON-array kohteista joilla lat ja lon kentät"},
-            "eps_km": {"type": "number", "description": "Klusterin maksimietäisyys km (oletus 5)"},
-            "min_points": {"type": "integer", "description": "Minimikoko klusterille (oletus 2)"},
+            "items": {"type": "array", "description": "List of objects with lat/lon fields"},
+            "radius_km": {"type": "number", "description": "Cluster radius in km (default 10)"},
+            "min_cluster_size": {"type": "number", "description": "Minimum points per cluster (default 3)"},
         },
-        "category": "analytiikka",
-        "category_label": "🔬 Analytiikka",
-        "open_data": True,
+        "avoindata_category": "tiede-ja-teknologia",
+        "avoindata_category_label": "Tiede ja teknologia",
+        "source_org": "Anthene Analysis",
+        "license": "Internal",
+        "open_data": False,
+        "avoindata_url": None,
     },
     "correlate_events": {
         "fn": correlate_events,
         "name": "Tapahtumien korrelaatio",
-        "description": "Korreloi kaksi tapahtumajoukkoa sijainnin perusteella. Löytää alukset ja lentokoneet jotka olivat samassa paikassa samaan aikaan.",
+        "description": (
+            "Korreloi kaksi tapahtumajoukkoa sijainnin perusteella. "
+            "Esim. lentokoneet vs alukset samalla alueella — löytää yhteisesiintymät."
+        ),
         "parameters": {
-            "primary_json": {"type": "string", "description": "Ensisijainen tapahtumajoukko JSON-muodossa (lat/lon)"},
-            "secondary_json": {"type": "string", "description": "Toissijainen tapahtumajoukko JSON-muodossa (lat/lon)"},
-            "time_window_minutes": {"type": "integer"},
-            "distance_km": {"type": "number"},
+            "events_a": {"type": "array", "description": "First list of events with lat/lon"},
+            "events_b": {"type": "array", "description": "Second list of events with lat/lon"},
+            "radius_km": {"type": "number", "description": "Correlation radius in km (default 20)"},
         },
-        "category": "analytiikka",
-        "category_label": "🔬 Analytiikka",
-        "open_data": True,
+        "avoindata_category": "tiede-ja-teknologia",
+        "avoindata_category_label": "Tiede ja teknologia",
+        "source_org": "Anthene Analysis",
+        "license": "Internal",
+        "open_data": False,
+        "avoindata_url": None,
     },
-    # ── 🚨 Pakotteet & Tiedustelu ────────────────────────────
-    "sanctions_vessel": {
-        "fn": sanctions_check_vessel,
-        "name": "Pakotelistaus (alus)",
-        "description": "Tarkistaa aluksen kansainvälisiltä pakotelistoilta (YK, EU, USA OFAC, UK). Haku nimellä, MMSI:llä tai IMO-numerolla. (OpenSanctions, CC BY-NC 4.0)",
+    # ── Search ────────────────────────────────────────────────
+    "web_search": {
+        "fn": web_search,
+        "name": "Web-haku",
+        "description": (
+            "Hakee tietoa verkosta. Palauttaa linkit ja kuvaukset hakutuloksista. "
+            "Käyttää Bing-hakua (jos avain asetettu) tai DuckDuckGo-fallbackia."
+        ),
         "parameters": {
-            "query": {"type": "string", "description": "Aluksen nimi, MMSI tai IMO-numero"},
-            "fuzzy": {"type": "boolean", "description": "Salli epätarkka haku (oletus true)"},
+            "query": {"type": "string", "description": "Search query"},
+            "count": {"type": "number", "description": "Number of results (default 5)"},
         },
-        "category": "tiedustelu",
-        "category_label": "🔍 Tiedustelu & Analytiikka",
-        "source_org": "OpenSanctions",
-        "license": "CC BY-NC 4.0",
-        "open_data": True,
-        "avoindata_url": "https://www.opensanctions.org/",
+        "avoindata_category": "tiede-ja-teknologia",
+        "avoindata_category_label": "Tiede ja teknologia",
+        "source_org": "Bing / DuckDuckGo",
+        "license": "Commercial (Bing) / Open (DuckDuckGo)",
+        "open_data": False,
+        "avoindata_url": None,
     },
-    "sanctions_entity": {
-        "fn": sanctions_check_entity,
-        "name": "Pakotelistaus (yritys/henkilö)",
-        "description": "Tarkistaa yrityksen tai henkilön kansainvälisiltä pakotelistoilta. Kattaa yli 100 kansallista listaa. (OpenSanctions, CC BY-NC 4.0)",
+    # ── Utility ───────────────────────────────────────────────
+    "calculator": {
+        "fn": calculator,
+        "name": "Laskin",
+        "description": (
+            "Evaluoi matemaattisen lausekkeen turvallisesti. "
+            "Tukee peruslaskutoimituksia, trigonometriaa, logaritmeja. "
+            "Esim: '2 * pi * 6371' tai 'sqrt(3**2 + 4**2)'."
+        ),
         "parameters": {
-            "query": {"type": "string", "description": "Nimi tai organisaatio"},
-            "schema": {"type": "string", "description": "LegalEntity, Person tai Organization"},
+            "expression": {"type": "string", "description": "Math expression to evaluate"},
         },
-        "category": "tiedustelu",
-        "category_label": "🔍 Tiedustelu & Analytiikka",
-        "source_org": "OpenSanctions",
-        "license": "CC BY-NC 4.0",
-        "open_data": True,
-    },
-    # ── 📢 Viestintä ─────────────────────────────────────────
-    "telegram_notify": {
-        "fn": telegram_notify,
-        "name": "Telegram-ilmoitus",
-        "description": "Lähettää viestin Anthene-Telegram-kanavalle.",
-        "parameters": {"message": {"type": "string"}},
-        "category": "viestinta",
-        "category_label": "📢 Viestintä",
+        "avoindata_category": "tiede-ja-teknologia",
+        "avoindata_category_label": "Tiede ja teknologia",
+        "source_org": "Anthene",
+        "license": "Internal",
+        "open_data": False,
+        "avoindata_url": None,
     },
 }
