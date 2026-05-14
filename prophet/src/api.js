@@ -25,6 +25,10 @@ export function createApiClient(getToken) {
   return {
     // Tools
     getTools: () => call('/api/tools'),
+    callTool: (toolId, params) => call(`/api/tools/call/${toolId}`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
 
     // Agents
     listMyAgents: () => call('/api/agents'),

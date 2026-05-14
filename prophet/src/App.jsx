@@ -4,6 +4,8 @@ import { loginRequest, DEV_MODE } from './config'
 import { createApiClient } from './api'
 import AgentCard from './components/AgentCard'
 import TestChat from './components/TestChat'
+import FlightMapView from './components/FlightMapView'
+import QuickAgentModal from './components/QuickAgentModal'
 import './App.css'
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
@@ -99,6 +101,7 @@ function Prophet({ user, getToken, onLogout }) {
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sessionKey, setSessionKey] = useState(0) // remount TestChat on new session
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const api = createApiClient(getToken)
 
@@ -232,6 +235,7 @@ function Prophet({ user, getToken, onLogout }) {
     else if (view === 'sessio' && activeAgent) {
       parts.push('Agentit', activeAgent.name, `Sessio ${activeSessionId?.slice(-8) || ''}`)
     }
+    else if (view === 'kartta') parts.push('Lentoanalyysi')
     return parts
   })()
 
@@ -262,6 +266,7 @@ function Prophet({ user, getToken, onLogout }) {
             { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
             { id: 'agentit',   icon: '🤖', label: 'Agentit' },
             { id: 'sessiot',   icon: '📋', label: 'Sessiot' },
+            { id: 'kartta',    icon: '✈️', label: 'Lentoanalyysi' },
           ].map(item => (
             <button
               key={item.id}
@@ -369,7 +374,7 @@ function Prophet({ user, getToken, onLogout }) {
         )}
 
         {/* Views */}
-        <div className={`view-container ${view === 'sessio' ? 'view-fullscreen' : ''}`}>
+        <div className={`view-container ${view === 'sessio' || view === 'kartta' ? 'view-fullscreen' : ''}`}>
 
           {/* ── Dashboard ─────────────────────────────────────────────────── */}
           {view === 'dashboard' && (
@@ -396,6 +401,7 @@ function Prophet({ user, getToken, onLogout }) {
               loading={loading}
               onLaunch={launchAgent}
               onTogglePin={togglePin}
+              onCreateNew={() => setShowCreateModal(true)}
             />
           )}
 
@@ -419,8 +425,22 @@ function Prophet({ user, getToken, onLogout }) {
               onClose={closeSession}
             />
           )}
+
+          {/* ── Lentoanalyysi ─────────────────────────────────────────────── */}
+          {view === 'kartta' && (
+            <FlightMapView api={api} getToken={getToken} />
+          )}
         </div>
       </div>
+
+      {/* Quick create modal */}
+      {showCreateModal && (
+        <QuickAgentModal
+          api={api}
+          onCreated={() => { setShowCreateModal(false); loadAgents() }}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
     </div>
   )
 }
@@ -532,7 +552,7 @@ function QuickLaunchCard({ agent, onLaunch }) {
 }
 
 // ── Agentit view ──────────────────────────────────────────────────────────────
-function AgentitView({ agents, storeAgents, ownPlusCopied, pinnedIds, loading, onLaunch, onTogglePin }) {
+function AgentitView({ agents, storeAgents, ownPlusCopied, pinnedIds, loading, onLaunch, onTogglePin, onCreateNew }) {
   const [search, setSearch] = useState('')
 
   const filtered = ownPlusCopied.filter(a =>
@@ -552,6 +572,9 @@ function AgentitView({ agents, storeAgents, ownPlusCopied, pinnedIds, loading, o
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        {onCreateNew && (
+          <button className="btn-primary" onClick={onCreateNew}>✚ Luo uusi agentti</button>
+        )}
       </div>
 
       {loading && <div className="spinner">Ladataan…</div>}

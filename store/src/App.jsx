@@ -5,6 +5,7 @@ import { createApiClient } from './api'
 import AgentCard from './components/AgentCard'
 import AgentPreview from './components/AgentPreview'
 import AdminTable from './components/AdminTable'
+import QuickAgentModal from './components/QuickAgentModal'
 import { ToastContainer } from './components/Toast'
 
 const CATEGORIES = ['Kaikki', 'Aluevalvonta', 'Yleinen', 'Kriittinen infra', 'Liikenne', 'Meri', 'Ilma', 'Sensorfusion', 'Anomaliat', 'Hälytykset', 'Analyysit']
@@ -45,6 +46,7 @@ export default function App() {
   const [loadingMy, setLoadingMy] = useState(false)
   const [loadingAdmin, setLoadingAdmin] = useState(false)
 
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Kaikki')
   const [sort, setSort] = useState('newest')
@@ -317,6 +319,7 @@ export default function App() {
               <section className="view">
                 <div className="view-toolbar">
                   <h2>🤖 Omat agentit <span className="count-badge">{filteredMy.length}</span></h2>
+                  <button className="btn-primary" onClick={() => setShowCreateModal(true)}>✚ Luo uusi agentti</button>
                 </div>
                 <SearchBar />
                 {loadingMy ? (
@@ -372,6 +375,15 @@ export default function App() {
           onClose={() => setPreviewAgent(null)}
           onRun={handleRunTest(previewAgent)}
           onCopy={view === 'Store' ? handleCopy : undefined}
+        />
+      )}
+
+      {/* Quick create modal */}
+      {showCreateModal && (
+        <QuickAgentModal
+          api={api}
+          onCreated={() => { setShowCreateModal(false); loadMy() }}
+          onClose={() => setShowCreateModal(false)}
         />
       )}
 

@@ -265,10 +265,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
     <div class="hero">
       <span class="hero-eyebrow">Vivicta · Anthene Product Family</span>
       <h1>Kaksi erillistä ympäristöä,<br>yksi <em>Anthene</em>-tuoteperhe</h1>
-      <p>Anthene koostuu kahdesta täysin toisistaan riippumattomasta Azure-ympäristöstä — <strong>Anthene Agentic</strong> ja <strong>Anthene Light</strong> — joilla on omat resurssit, autentikointi ja infrastruktuuri.</p>
+      <p>Anthene koostuu kahdesta täysin toisistaan riippumattomasta Azure-ympäristöstä — <strong>Anthene Agentic</strong> (uusi agenttinen demo) ja <strong>Anthene Light</strong> — joilla on omat resurssit, autentikointi ja infrastruktuuri.</p>
       <div class="hero-badges">
-        <span class="hero-badge hb-agentic">⚡ Anthene Agentic — Container Apps · Cosmos DB · B2C</span>
-        <span class="hero-badge hb-light">🔵 Anthene Light — App Service · MapLibre · ADS-B</span>
+        <span class="hero-badge hb-agentic">⚡ Anthene Agentic — Uusi agenttinen demo · Container Apps</span>
+        <span class="hero-badge hb-light">🔵 Anthene Light — Demo v1 · Ei agenttisuutta</span>
         <span class="hero-badge hb-indep">🔒 Täysin toisistaan riippumattomat</span>
       </div>
     </div>
@@ -279,7 +279,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
     <div class="env-block env-agentic">
       <div class="env-header">
         <div class="env-title-block">
-          <div class="env-env-tag etag-agentic">⚡ Ympäristö 1 · Tuotantoalusta</div>
+          <div class="env-env-tag etag-agentic">⚡ Ympäristö 1 · Uusi Agenttinen demo-ympäristö</div>
           <div class="env-title">Anthene <em>Agentic</em></div>
           <div class="env-desc">
             Täysimittainen agenttinen AI-alusta — käyttäjät luovat, operoivat ja jakavat LangGraph-pohjaisia AI-agentteja.
@@ -396,6 +396,96 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
           </div>
         </a>
 
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">✈️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Lentoanalyysi-näkymä</div>
+              <span class="prd-status stat-live">● UUSI · Prophet</span>
+            </div>
+          </div>
+          <div class="prd-desc">MapLibre GL -kartta live ADS-B-lentokoneilla (5 s päivitys), AOI-polygonipiirto, useita samanaikaisia analyysi-ikkunoita.</div>
+          <div class="prd-tags">
+            <span class="ptag">MapLibre GL</span><span class="ptag">ADS-B</span>
+            <span class="ptag">AOI-polygoni</span><span class="ptag">Live 5 s</span>
+          </div>
+        </div>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">🗺️</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">AoiWindow</div>
+              <span class="prd-status stat-live">● UUSI · Prophet</span>
+            </div>
+          </div>
+          <div class="prd-desc">Per-AOI analyysiikkuna kolmella välilehdellä: Kartta, Agenttianalyysi (AI-chat) ja Hälytykset.</div>
+          <div class="prd-tags">
+            <span class="ptag">AOI-ikkuna</span><span class="ptag">AI-chat</span>
+            <span class="ptag">Hälytykset</span><span class="ptag">3 välilehteä</span>
+          </div>
+        </div>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">🔔</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Automaattihälytykset</div>
+              <span class="prd-status stat-live">● UUSI · Prophet</span>
+            </div>
+          </div>
+          <div class="prd-desc">Automaattiset hälytykset sotilas- ja hätälentokoneille sekä squawk-koodeille 7500 (kaappaus), 7600 (radio) ja 7700 (hätä).</div>
+          <div class="prd-tags">
+            <span class="ptag">Squawk 7500</span><span class="ptag">Squawk 7600</span>
+            <span class="ptag">Squawk 7700</span><span class="ptag">Sotilasilmailu</span>
+          </div>
+        </div>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">🌍</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">Karttatyylivaihto</div>
+              <span class="prd-status stat-live">● UUSI · Prophet</span>
+            </div>
+          </div>
+          <div class="prd-desc">Kolme karttapohjaa: Yö (dark-matter), Päivä (positron) ja Satelliitti (Esri). Operaattori valitsee tilanteen mukaan.</div>
+          <div class="prd-tags">
+            <span class="ptag">Dark-matter</span><span class="ptag">Positron</span>
+            <span class="ptag">Esri satelliitti</span><span class="ptag">Tyylivaihto</span>
+          </div>
+        </div>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">🔧</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">POST /api/tools/call/{tool_id}</div>
+              <span class="prd-status stat-api">● UUSI · API</span>
+            </div>
+          </div>
+          <div class="prd-desc">Frontend voi kutsua kaikkia Tool Hub -työkaluja suoraan yhdellä REST-kutsulla ilman agenttisuoritusta.</div>
+          <div class="prd-tags">
+            <span class="ptag">REST</span><span class="ptag">Tool Hub</span>
+            <span class="ptag">Direct call</span><span class="ptag">FastAPI</span>
+          </div>
+        </div>
+
+        <div class="prd-card no-link">
+          <div class="prd-head">
+            <span class="prd-icon">✚</span>
+            <div class="prd-title-wrap">
+              <div class="prd-title">QuickAgentModal</div>
+              <span class="prd-status stat-live">● UUSI · Store &amp; Prophet</span>
+            </div>
+          </div>
+          <div class="prd-desc">Operaattori voi luoda uuden agentin suoraan Operator Dashboard- tai Flight Analyst -näkymästä ilman Creator-sovellusta.</div>
+          <div class="prd-tags">
+            <span class="ptag">Store</span><span class="ptag">Prophet</span>
+            <span class="ptag">Inline create</span><span class="ptag">React modal</span>
+          </div>
+        </div>
+
       </div>
 
       <!-- Architecture strip -->
@@ -409,6 +499,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
               <div class="arch-comp">AgentStore (SWA)</div>
               <div class="arch-comp">Prophet / Operator (SWA)</div>
               <div class="arch-comp">MSAL Azure B2C</div>
+              <div class="arch-comp">FlightMapView (MapLibre)</div>
+              <div class="arch-comp">AoiWindow</div>
+              <div class="arch-comp">QuickAgentModal</div>
             </div>
           </div>
           <div class="arch-arrow">→</div>
@@ -464,11 +557,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#07090f;color:#e2e8f
     <div class="env-block env-light">
       <div class="env-header">
         <div class="env-title-block">
-          <div class="env-env-tag etag-light">🔵 Ympäristö 2 · Demo &amp; Pilot</div>
+          <div class="env-env-tag etag-light">🔵 Ympäristö 2 · Demo v1 — ei agenttisuutta</div>
           <div class="env-title">Anthene <em>Light</em></div>
           <div class="env-desc">
-            Tilannekuva- ja lentoanalyysidemo. Reaaliaikainen ADS-B-ilmaliikenneseuranta, AOI-polygonianalyysi,
-            MapLibre-karttapohja, LangGraph-lentokonsultti. Azure App Service -pohjainen backend.
+            Tilannekuva- ja lentoanalyysidemo ilman agenttipohjaista AI:ta. Reaaliaikainen ADS-B-ilmaliikenneseuranta,
+            AOI-polygonianalyysi, MapLibre-karttapohja ja sääntöpohjainen lentokonsultti.
+            Azure App Service -pohjainen backend. <strong>Ei käyttäjähallintaa eikä agenttirekisteriä.</strong>
           </div>
         </div>
         <div class="env-infra">
