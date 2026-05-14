@@ -155,28 +155,40 @@ async def run_agent_stream(
         system_prompt = agent_def.get("system_prompt", "You are a helpful assistant.")
 
         # --- Capability constraint (always injected) ---
-        # Build tool list description from selected tools only
+        # Split tools: enabled vs available-but-not-enabled
+        available_not_enabled = [t for t in all_tools if t["id"] not in enabled_ids]
+
         if selected_tools:
-            tool_lines = "\n".join(
-                f"  - {t['name']}: {t.get('description', '')}" for t in selected_tools
-            )
-            capability_block = (
-                "\n\n---\nKÄYTETTÄVISSÄ OLEVAT KYVYKKYYDET (vain nämä):\n"
-                f"{tool_lines}\n\n"
-                "TÄRKEÄ RAJOITE: Toimi AINOASTAAN yllä lueteltujen työkalujen ja kyvykkyyksien puitteissa. "
-                "Älä koskaan ehdota ulkoisia rajapintoja, kolmannen osapuolen palveluita, webhookeja, "
-                "skriptejä tai muita integraatioita joita ei ole lueteltu yllä. "
-                "Jos käyttäjä pyytää jotain mitä tämä järjestelmä ei pysty tekemään, "
-                "vastaa lyhyesti: mitä pyydettiin, miksi se ei onnistu nykyisillä kyvykkyyksillä, "
-                "ja ehdota pelkästään kirjausta kehitys-backlogiin. Älä anna ohjeita ulkoisiin järjestelmiin."
-                "---"
+            enabled_lines = "\n".join(
+                f"  - {t['name']} [id:{t['id']}]: {t.get('description', '')}" for t in selected_tools
             )
         else:
-            capability_block = (
-                "\n\n---\nEi aktiivisia työkaluja. Voit vastata vain yleisiin kysymyksiin. "
-                "Jos käyttäjä pyytää dataa tai toimintoja, kerro että kyvykkyys puuttuu "
-                "ja ehdota kirjausta kehitys-backlogiin.\n---"
+            enabled_lines = "  (ei yhtään työkalua käytössä)"
+
+        if available_not_enabled:
+            available_lines = "\n".join(
+                f"  - {t['name']} [id:{t['id']}]: {t.get('description', '')}" for t in available_not_enabled
             )
+        else:
+            available_lines = "  (ei lisättäviä työkaluja)"
+
+        capability_block = (
+            "\n\n---\n"
+            "TÄMÄN AGENTIN KÄYTÖSSÄ OLEVAT TYÖKALUT:\n"
+            f"{enabled_lines}\n\n"
+            "JÄRJESTELMÄSSÄ SAATAVILLA MUTTA EI KÄYTÖSSÄ TÄSSÄ AGENTISSA:\n"
+            f"{available_lines}\n\n"
+            "KÄYTTÄYTYMISSÄÄNNÖT:\n"
+            "1. Toimi VAIN yllä lueteltujen käytössä olevien työkalujen puitteissa.\n"
+            "2. Jos käyttäjä pyytää jotain mitä EI OLE käytössä tässä agentissa MUTTA ON saatavilla järjestelmässä, "
+            "vastaa lyhyesti: mitä pyydettiin, mikä työkalu sen hoitaisi, ja sisällytä vastaukseen TASAN YKSI rivi muodossa:\n"
+            "   [ADD_TOOL: tool_id | Työkalun nimi]\n"
+            "   Älä selitä enemmän — käyttäjä näkee nappin jolla lisätä työkalu.\n"
+            "3. Jos pyydettävää kyvykkyyttä EI OLE missään järjestelmässä, vastaa lyhyesti mitä pyydettiin "
+            "ja ehdota pelkästään kirjausta kehitys-backlogiin.\n"
+            "4. Älä KOSKAAN ehdota ulkoisia rajapintoja, kolmannen osapuolen palveluita tai muita integraatioita.\n"
+            "---"
+        )
         system_prompt += capability_block
 
         if aoi_bbox:
