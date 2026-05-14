@@ -7,6 +7,8 @@ import AgentPreview from './components/AgentPreview'
 import AdminTable from './components/AdminTable'
 import QuickAgentModal from './components/QuickAgentModal'
 import { ToastContainer } from './components/Toast'
+import DevLogin from './components/DevLogin'
+import SituationalMap from './components/SituationalMap'
 
 const CATEGORIES = ['Kaikki', 'Aluevalvonta', 'Yleinen', 'Kriittinen infra', 'Liikenne', 'Meri', 'Ilma', 'Sensorfusion', 'Anomaliat', 'Hälytykset', 'Analyysit']
 const CATEGORY_VALUES = {
@@ -29,7 +31,7 @@ const SORT_OPTIONS = [
   { label: 'Eniten työkaluja', value: 'tools' },
 ]
 
-const VIEWS = ['Store', 'Omat', 'Admin']
+const VIEWS = ['Store', 'Omat', '🗺️ Tilannekuva', 'Admin']
 
 let toastIdCounter = 0
 
@@ -52,14 +54,16 @@ export default function App() {
   const [sort, setSort] = useState('newest')
   const [previewAgent, setPreviewAgent] = useState(null)
   const [toasts, setToasts] = useState([])
+  const [devToken, setDevToken] = useState(() => localStorage.getItem('anthene_token'))
+  const [devUser, setDevUser] = useState(() => { try { return JSON.parse(localStorage.getItem('anthene_user')) } catch { return null } })
 
-  const isLoggedIn = DEV_MODE || isAuthenticated
+  const isLoggedIn = (DEV_MODE && devToken != null) || isAuthenticated
 
   const getToken = useCallback(async () => {
-    if (DEV_MODE) return 'dev'
+    if (DEV_MODE) return devToken || localStorage.getItem('anthene_token') || 'dev'
     const resp = await instance.acquireTokenSilent({ ...loginRequest, account: accounts[0] })
     return resp.accessToken
-  }, [instance, accounts])
+  }, [instance, accounts, devToken])
 
   const api = useMemo(() => createApiClient(getToken), [getToken])
 
@@ -73,7 +77,7 @@ export default function App() {
   useEffect(() => {
     if (!isLoggedIn) return
     if (DEV_MODE) {
-      setUser({ name: 'Dev User', role: 'admin', sub: 'dev-user-1' })
+      setUser(devUser || { name: 'Dev User', role: 'admin', sub: 'dev-user-1' })
       return
     }
     api.getMe().then(setUser).catch(() => {
@@ -246,7 +250,7 @@ export default function App() {
               className={`nav-btn ${view === v ? 'active' : ''}`}
               onClick={() => { setPreviewAgent(null); setView(v) }}
             >
-              {v === 'Store' ? '🏪' : v === 'Omat' ? '🤖' : '🛡️'} {v}
+              {v === 'Store' ? '🏪' : v === 'Omat' ? '🤖' : v === '🗺️ Tilannekuva' ? '' : '🛡️'} {v}
             </button>
           ))}
         </nav>
@@ -256,7 +260,15 @@ export default function App() {
               <span className="user-name">{user?.name || 'Käyttäjä'}</span>
               {isAdmin && <span className="admin-badge">Admin</span>}
               {!DEV_MODE && <button className="btn-logout" onClick={handleLogout}>Kirjaudu ulos</button>}
-              {DEV_MODE && <span className="dev-badge">DEV</span>}
+              {DEV_MODE && (
+                <button className="btn-logout" onClick={() => {
+                  localStorage.removeItem('anthene_token')
+                  localStorage.removeItem('anthene_user')
+                  setDevToken(null)
+                  setDevUser(null)
+                  setUser(null)
+                }}>Kirjaudu ulos</button>
+              )}
             </>
           ) : (
             <button className="btn-login" onClick={handleLogin}>Kirjaudu sisään</button>
@@ -268,14 +280,18 @@ export default function App() {
 
       <main className="app-main">
         {!isLoggedIn ? (
-          <div className="login-wall">
-            <div className="login-card">
-              <span className="login-hex">⚡</span>
-              <h1>Anthene AgentStore</h1>
-              <p>Selaa ja ota käyttöön jaettuja AI-agentteja.<br/>Kirjaudu sisään jatkaaksesi.</p>
-              <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
-            </div>
-          </div>
+          DEV_MODE
+            ? <DevLogin onLogin={(token, user) => { setDevToken(token); setDevUser(user) }} />
+            : (
+              <div className="login-wall">
+                <div className="login-card">
+                  <span className="login-hex">⚡</span>
+                  <h1>Anthene AgentStore</h1>
+                  <p>Selaa ja ota käyttöön jaettuja AI-agentteja.<br/>Kirjaudu sisään jatkaaksesi.</p>
+                  <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
+                </div>
+              </div>
+            )
         ) : (
           <>
             {/* ── Store ── */}
@@ -362,6 +378,13 @@ export default function App() {
                   onChangeVisibility={handleChangeVisibility}
                   onDelete={handleDeleteAdmin}
                 />
+              </section>
+            )}
+
+            {/* ── Tilannekuva ── */}
+            {view === '🗺️ Tilannekuva' && (
+              <section className="view" style={{ padding: 0, height: 'calc(100vh - 120px)' }}>
+                <SituationalMap api={api} />
               </section>
             )}
           </>

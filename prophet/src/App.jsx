@@ -6,6 +6,7 @@ import AgentCard from './components/AgentCard'
 import TestChat from './components/TestChat'
 import FlightMapView from './components/FlightMapView'
 import QuickAgentModal from './components/QuickAgentModal'
+import DevLogin from './components/DevLogin'
 import './App.css'
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
@@ -45,10 +46,22 @@ function statusLabel(status) {
 
 // ── Root App — decides DEV vs MSAL mode ─────────────────────────────────────
 export default function App() {
+  const [devToken, setDevToken] = useState(() => localStorage.getItem('anthene_token'))
+  const [devUser, setDevUser] = useState(() => { try { return JSON.parse(localStorage.getItem('anthene_user')) } catch { return null } })
+
   if (DEV_MODE) {
-    const devUser = { name: 'Dev User', id: 'dev-user-1', email: 'dev@anthene.ai' }
-    const getToken = () => Promise.resolve('dev-token')
-    return <Prophet user={devUser} getToken={getToken} onLogout={null} />
+    if (!devToken) {
+      return <DevLogin onLogin={(token, user) => { setDevToken(token); setDevUser(user) }} />
+    }
+    const user = devUser || { name: 'Dev User', id: 'dev-user-1', email: 'dev@anthene.ai' }
+    const getToken = () => Promise.resolve(devToken)
+    const handleLogout = () => {
+      localStorage.removeItem('anthene_token')
+      localStorage.removeItem('anthene_user')
+      setDevToken(null)
+      setDevUser(null)
+    }
+    return <Prophet user={user} getToken={getToken} onLogout={handleLogout} />
   }
   return <MsalGate />
 }

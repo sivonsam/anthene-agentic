@@ -30,6 +30,8 @@ B2C_CLIENT_ID: str = os.getenv("B2C_CLIENT_ID", "")
 # In dev mode (no B2C configured) we allow a simple dev token
 DEV_MODE: bool = not B2C_TENANT_NAME or not B2C_CLIENT_ID
 
+JWT_SECRET: str = os.getenv("JWT_SECRET", "anthene-demo-secret-2025")
+
 
 def _jwks_url() -> str:
     return (
@@ -55,6 +57,16 @@ def validate_token(token: str) -> dict:
     In DEV_MODE (no B2C configured) accepts any well-formed JWT without
     signature verification and returns its payload — useful for local dev.
     """
+    # Try local HS256 token first (issued by /api/auth/login)
+    try:
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") == "HS256":
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            if payload.get("iss") == "anthene-local":
+                return payload
+    except Exception:
+        pass
+
     if DEV_MODE:
         logger.warning("DEV_MODE: skipping B2C JWT signature validation")
         # Accept special sentinel tokens for local / demo use

@@ -7,6 +7,7 @@ import AgentCard from './components/AgentCard'
 import TestChat from './components/TestChat'
 import AgentConsultant, { SUPERAGENT_TOOLS, SUPERAGENT_PROMPT } from './components/AgentConsultant'
 import AdminPanel from './components/AdminPanel'
+import DevLogin from './components/DevLogin'
 import './App.css'
 
 export default function App() {
@@ -25,12 +26,14 @@ export default function App() {
   const [formLoading, setFormLoading] = useState(false)
   // 'consult' | 'manual' — create mode
   const [createMode, setCreateMode] = useState('consult')
+  const [devToken, setDevToken] = useState(() => localStorage.getItem('anthene_token'))
+  const [devUser, setDevUser] = useState(() => { try { return JSON.parse(localStorage.getItem('anthene_user')) } catch { return null } })
 
   const getToken = useCallback(async () => {
-    if (DEV_MODE) return 'dev'
+    if (DEV_MODE) return devToken || localStorage.getItem('anthene_token') || 'dev'
     const resp = await instance.acquireTokenSilent({ ...loginRequest, account: accounts[0] })
     return resp.accessToken
-  }, [instance, accounts])
+  }, [instance, accounts, devToken])
 
   const api = createApiClient(getToken)
 
@@ -60,7 +63,7 @@ export default function App() {
     } catch (e) { setError(e.message) }
   }
 
-  const isLoggedIn = DEV_MODE || isAuthenticated
+  const isLoggedIn = (DEV_MODE && devToken != null) || isAuthenticated
 
   useEffect(() => { if (isLoggedIn) loadData() }, [isLoggedIn])
   useEffect(() => { if (view === 'AgentStore' && isLoggedIn) loadStore() }, [view, isLoggedIn])
@@ -119,8 +122,8 @@ export default function App() {
       onToken, onToolStart, onToolEnd, onDone, onError, getToken)
   }
 
-  const user = DEV_MODE ? { name: 'Dev User' } : accounts[0]
-  const isAdmin = DEV_MODE || userProfile?.role === 'admin'
+  const user = DEV_MODE ? (devUser || { name: 'Dev User' }) : accounts[0]
+  const isAdmin = (DEV_MODE && devUser?.role === 'admin') || userProfile?.role === 'admin'
   const VIEWS = ['Omat agentit', 'Luo agentti', 'AgentStore', ...(isAdmin ? ['Hallinta'] : [])]
 
   return (
@@ -144,7 +147,14 @@ export default function App() {
             <>
               <span className="user-name">{user?.name || 'Käyttäjä'}</span>
               {!DEV_MODE && <button className="btn-logout" onClick={handleLogout}>Kirjaudu ulos</button>}
-              {DEV_MODE && <span className="dev-badge">DEV</span>}
+              {DEV_MODE && (
+                <button className="btn-logout" onClick={() => {
+                  localStorage.removeItem('anthene_token')
+                  localStorage.removeItem('anthene_user')
+                  setDevToken(null)
+                  setDevUser(null)
+                }}>Kirjaudu ulos</button>
+              )}
             </>
           ) : (
             <button className="btn-login" onClick={handleLogin}>Kirjaudu sisään</button>
@@ -158,14 +168,18 @@ export default function App() {
         {error && <div className="error-banner">⚠️ {error} <button onClick={() => setError(null)}>✕</button></div>}
 
         {!isLoggedIn ? (
-          <div className="login-wall">
-            <div className="login-card">
-              <span className="login-hex">⚡</span>
-              <h1>Anthene Agent Creator</h1>
-              <p>Luo, hallinnoi ja testaa omia AI-agenttejasi.<br/>Kirjaudu sisään jatkaaksesi.</p>
-              <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
-            </div>
-          </div>
+          DEV_MODE
+            ? <DevLogin onLogin={(token, user) => { setDevToken(token); setDevUser(user) }} />
+            : (
+              <div className="login-wall">
+                <div className="login-card">
+                  <span className="login-hex">⚡</span>
+                  <h1>Anthene Agent Creator</h1>
+                  <p>Luo, hallinnoi ja testaa omia AI-agenttejasi.<br/>Kirjaudu sisään jatkaaksesi.</p>
+                  <button className="btn-primary btn-lg" onClick={handleLogin}>Kirjaudu sisään</button>
+                </div>
+              </div>
+            )
         ) : (
           <>
             {view === 'Omat agentit' && (

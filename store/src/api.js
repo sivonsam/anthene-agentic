@@ -83,5 +83,10 @@ export function createApiClient(getToken) {
       }
       runStream()
     },
+
+    callTool: (toolId, params) => call(`/api/tools/call/${toolId}`, {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }),
   }
 }

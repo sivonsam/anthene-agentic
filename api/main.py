@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from auth.router import router as auth_router
 from agents.router import router as agents_router
 from runtime.router import router as runtime_router
 from tools.router import router as tools_router
@@ -60,6 +61,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(runtime_router, prefix="/api")
 app.include_router(tools_router, prefix="/api")
