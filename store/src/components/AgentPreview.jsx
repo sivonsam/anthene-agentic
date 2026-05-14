@@ -17,6 +17,16 @@ const categoryLabels = {
   custom: 'Custom',
 }
 
+const MAP_TOOLS = new Set([
+  'adsb_area','adsb_trail','adsb_flight','adsb_military',
+  'weather_area','fmi_observations','fmi_warnings',
+  'effis_fires','effis_risk',
+  'nasa_firms_viirs','nasa_firms_modis',
+  'ais_area','ais_vessel','ais_trail',
+  'stuk_radiation','stuk_stations',
+  'gdacs','map_geocode'
+])
+
 // Slide-in right panel with full agent details + TestChat
 // Props: agent, onClose, onRun, onCopy
 export default function AgentPreview({ agent, onClose, onRun, onCopy }) {
@@ -29,10 +39,12 @@ export default function AgentPreview({ agent, onClose, onRun, onCopy }) {
 
   if (!agent) return null
 
+  const isMapBound = agent?.aoi || agent?.tools?.some(t => MAP_TOOLS.has(t))
+
   return (
     <>
       <div className="preview-backdrop" onClick={onClose} />
-      <aside className="preview-panel">
+      <aside className="preview-panel" style={isMapBound ? { width: 860 } : {}}>
         <div className="preview-header">
           <div className="preview-title">
             <div

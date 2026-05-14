@@ -247,7 +247,7 @@ export default function App() {
                     </div>
                   )}
                 {testingAgent && (
-                  <div className="test-panel-wrap">
+                  <div className="test-panel-wrap" style={{ maxWidth: '100%' }}>
                     <TestChat agent={testingAgent} onRun={handleRunTest(testingAgent)} />
                   </div>
                 )}
@@ -343,7 +343,7 @@ export default function App() {
                   </div>
                 )}
                 {testingAgent && (
-                  <div className="test-panel-wrap">
+                  <div className="test-panel-wrap" style={{ maxWidth: '100%' }}>
                     <TestChat agent={testingAgent} onRun={handleRunTest(testingAgent)} />
                   </div>
                 )}
