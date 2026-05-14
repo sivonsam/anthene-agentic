@@ -17,7 +17,8 @@ async function authFetch(url, options = {}, getToken) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail || `HTTP ${res.status}`)
   }
-  return res.json()
+  if (res.status === 204 || res.headers.get('content-length') === '0') return null
+  return res.json().catch(() => null)
 }
 
 export function createApiClient(getToken) {

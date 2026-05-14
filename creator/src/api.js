@@ -20,7 +20,8 @@ async function authFetch(url, options = {}, getToken) {
     error.status = res.status
     throw error
   }
-  return res.json()
+  if (res.status === 204 || res.headers.get('content-length') === '0') return null
+  return res.json().catch(() => null)
 }
 
 export function createApiClient(getToken) {
