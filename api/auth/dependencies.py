@@ -15,7 +15,7 @@ class CurrentUser:
         self.id: str = claims.get("oid") or claims.get("sub", "anonymous")
         self.email: str = claims.get("emails", [None])[0] if isinstance(claims.get("emails"), list) else claims.get("email", "")
         self.display_name: str = claims.get("name", claims.get("given_name", "User"))
-        self.role: str = claims.get("extension_Role", "user")
+        self.role: str = claims.get("extension_Role") or claims.get("role", "user")
         self.claims: dict = claims
 
     @property

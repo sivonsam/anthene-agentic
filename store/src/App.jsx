@@ -7,8 +7,20 @@ import AgentPreview from './components/AgentPreview'
 import AdminTable from './components/AdminTable'
 import { ToastContainer } from './components/Toast'
 
-const CATEGORIES = ['Kaikki', 'Security', 'Environmental', 'Logistics', 'Intelligence', 'Custom']
-const CATEGORY_VALUES = { 'Kaikki': '', 'Security': 'security', 'Environmental': 'environmental', 'Logistics': 'logistics', 'Intelligence': 'intelligence', 'Custom': 'custom' }
+const CATEGORIES = ['Kaikki', 'Aluevalvonta', 'Yleinen', 'Kriittinen infra', 'Liikenne', 'Meri', 'Ilma', 'Sensorfusion', 'Anomaliat', 'Hälytykset', 'Analyysit']
+const CATEGORY_VALUES = {
+  'Kaikki': '',
+  'Aluevalvonta': 'aluevalvonta',
+  'Yleinen': 'yleinen',
+  'Kriittinen infra': 'kriittinen-infra',
+  'Liikenne': 'liikenne',
+  'Meri': 'meri',
+  'Ilma': 'ilma',
+  'Sensorfusion': 'sensorfusion',
+  'Anomaliat': 'anomaliat',
+  'Hälytykset': 'halytykset',
+  'Analyysit': 'analyysit',
+}
 
 const SORT_OPTIONS = [
   { label: 'Uusimmat', value: 'newest' },

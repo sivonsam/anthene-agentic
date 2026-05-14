@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 
-const CATEGORIES = ['security', 'environmental', 'logistics', 'intelligence', 'custom']
+const CATEGORIES = [
+  'aluevalvonta', 'yleinen', 'kriittinen-infra', 'liikenne',
+  'meri', 'ilma', 'sensorfusion', 'anomaliat', 'halytykset', 'analyysit'
+]
 const MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'phi-3-medium', 'mistral-large']
 const VISIBILITIES = [
   { value: 'private', label: '🔒 Yksityinen', desc: 'Vain sinä näet tämän agentin' },
@@ -15,7 +18,7 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
     tools: [],
     model: 'gpt-4o',
     visibility: 'private',
-    category: 'custom',
+    category: 'yleinen',
     graph_type: 'react',
     memory_scope: 'conversation',
     ...initial,
