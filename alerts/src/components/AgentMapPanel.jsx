@@ -233,10 +233,6 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
   const drawMarkers = useRef([])
   const drawingRef = useRef(false)
 
-  // Map ready flag — 'load' fires only once; map.loaded() goes false during tile loads
-  // so we track readiness ourselves to avoid registering a never-firing once('load',…)
-  const mapLoadedRef = useRef(false)
-
   // Aircraft tracking state
   const [trackedAc, setTrackedAc] = useState(null)   // { callsign, registration, hex, label }
   const trackHistory = useRef([])                      // [[lon,lat], ...]  max 30 positions
@@ -261,7 +257,7 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
 
   function updateTrackLayers(pos, acData) {
     const map = mapInstance.current
-    if (!map || !mapLoadedRef.current) return
+    if (!map || !map.loaded()) return
     const history = trackHistory.current
     const lineData = { type: 'Feature', geometry: { type: 'LineString', coordinates: history.length > 1 ? history : [] } }
     if (map.getSource('track-trail')) {
@@ -344,7 +340,6 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
 
     map.on('load', () => {
-      mapLoadedRef.current = true
       if (agent?.aoi) {
         map.addSource('aoi', { type: 'geojson', data: agent.aoi })
         map.addLayer({ id: 'aoi-fill', type: 'fill', source: 'aoi', paint: { 'fill-color': '#7c6fcd', 'fill-opacity': 0.1 } })
@@ -352,13 +347,13 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
       }
     })
 
-    return () => { mapLoadedRef.current = false; map.remove() }
+    return () => map.remove()
   }, [])
 
   // Render drawnAoi polygon on map whenever it changes
   useEffect(() => {
     const map = mapInstance.current
-    if (!map || !mapLoadedRef.current) return
+    if (!map || !map.loaded()) return
     const SRC = 'drawn-aoi'
     if (map.getSource(SRC)) {
       if (drawnAoi) {
@@ -447,9 +442,7 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
 
     setLayerCounts(counts)
     } // applyMarkers
-    // Use mapLoadedRef instead of map.loaded() — loaded() returns false during tile loads
-    // even after initial 'load' fired, causing once('load',…) to never fire again
-    if (mapLoadedRef.current) applyMarkers()
+    if (map.loaded()) applyMarkers()
     else map.once('load', applyMarkers)
   }, [toolResults])
 

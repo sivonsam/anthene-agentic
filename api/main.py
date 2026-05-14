@@ -38,6 +38,8 @@ from runtime.router import router as runtime_router
 from tools.router import router as tools_router
 from users.router import router as users_router
 from consult.router import router as consult_router
+from alerts.router import router as alerts_router
+from telegram.router import router as telegram_router
 
 load_dotenv()
 
@@ -67,6 +69,8 @@ app.include_router(runtime_router, prefix="/api")
 app.include_router(tools_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(consult_router, prefix="/api")
+app.include_router(alerts_router, prefix="/api")
+app.include_router(telegram_router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -58,12 +58,14 @@ async def _fetch_tool_list() -> list[dict]:
         return resp.json()
 
 
-def _build_lc_tool(tool_meta: dict, aoi_bbox: dict | None = None) -> StructuredTool:
+def _build_lc_tool(tool_meta: dict, aoi_bbox: dict | None = None, extra_defaults: dict | None = None) -> StructuredTool:
     """Build a typed LangChain StructuredTool that calls the Tool Hub."""
     tool_id = tool_meta["id"]
-    # OpenAI tool names: only [a-zA-Z0-9_.-] allowed
+    # Use the tool ID as the LangChain tool name — it's already clean (a-z0-9_)
+    # and the LLM can match it to the capability block which shows [id:...].
+    # OpenAI tool names: only [a-zA-Z0-9_.-] allowed — tool IDs satisfy this.
     import re
-    tool_name = re.sub(r'[^a-zA-Z0-9_.\-]', '_', tool_meta["name"]).strip('_').lower()
+    tool_name = re.sub(r'[^a-zA-Z0-9_.\-]', '_', tool_id).strip('_').lower()
     tool_name = re.sub(r'_+', '_', tool_name)  # collapse multiple underscores
     tool_desc = tool_meta["description"]
     parameters = tool_meta.get("parameters", {})
@@ -78,12 +80,14 @@ def _build_lc_tool(tool_meta: dict, aoi_bbox: dict | None = None) -> StructuredT
         create_model(f"{tool_name}_args", **field_defs) if field_defs else None
     )
 
-    # Pre-fill geo defaults from AOI bounding box
+    # Pre-fill geo defaults from AOI bounding box + any extra defaults (e.g. chat_id)
     _geo_defaults: dict = {}
     if aoi_bbox and parameters:
         for pname in parameters:
             if pname in aoi_bbox:
                 _geo_defaults[pname] = aoi_bbox[pname]
+    if extra_defaults:
+        _geo_defaults.update(extra_defaults)
 
     async def _call(**kwargs) -> str:
         merged = {**_geo_defaults, **{k: v for k, v in kwargs.items() if v is not None}}
@@ -142,6 +146,7 @@ async def run_agent_stream(
     message: str,
     session_id: str,
     run_id: str,
+    user_id: str = "",
 ) -> AsyncIterator[str]:
     """Stream SSE events from a LangGraph ReAct agent."""
 
@@ -153,6 +158,17 @@ async def run_agent_stream(
         all_tools = await _fetch_tool_list()
         enabled_ids = set(agent_def.get("tools", []))
         selected_tools = [t for t in all_tools if t["id"] in enabled_ids]
+
+        # Fetch user's Telegram chat_id for telegram_alert tool injection
+        user_telegram_chat_id = ""
+        if user_id and "telegram_alert" in enabled_ids:
+            try:
+                from telegram.cosmos import get_telegram_user
+                tg = await get_telegram_user(user_id)
+                if tg and tg.get("chat_id") and not tg.get("pending"):
+                    user_telegram_chat_id = str(tg["chat_id"])
+            except Exception:
+                pass
 
         # AOI — inject bounding box as default args for geo tools
         aoi = agent_def.get("aoi")  # GeoJSON Polygon geometry | None
@@ -192,7 +208,10 @@ async def run_agent_stream(
                 "dist_nm": round(max_radius_nm, 1),
             }
 
-        lc_tools = [_build_lc_tool(t, aoi_bbox) for t in selected_tools]
+        lc_tools = [_build_lc_tool(
+            t, aoi_bbox,
+            extra_defaults={"chat_id": user_telegram_chat_id} if t["id"] == "telegram_alert" and user_telegram_chat_id else None,
+        ) for t in selected_tools]
 
         # Build LLM
         llm = _make_llm(agent_def.get("model", "gpt-4o"))
@@ -246,7 +265,11 @@ async def run_agent_stream(
                 f"lon_min={aoi_bbox['lon_min']:.4f} lon_max={aoi_bbox['lon_max']:.4f}\n"
                 f"- Digitraffic/bbox-muoto: lamin={aoi_bbox['lamin']:.4f} lamax={aoi_bbox['lamax']:.4f} "
                 f"lomin={aoi_bbox['lomin']:.4f} lomax={aoi_bbox['lomax']:.4f}\n"
-                f"Analysoi tapahtumat tällä alueella. Käytä mieluiten vessels_bbox aluksille (bbox-haulla) ja adsb_area/opensky_area lentokoneille (säde-haulla)."
+                f"Analysoi tapahtumat tällä alueella. Käytä mieluiten vessels_bbox aluksille (bbox-haulla) ja adsb_area/opensky_area lentokoneille (säde-haulla).\n\n"
+                f"TÄRKEÄÄ — Alueskopeutus: Kun AOI on valittu, rajoita KAIKKI vastauksesi ja analyysisi kyseiseen alueeseen. "
+                f"Jos käyttäjä esittää avoimen kysymyksen (esim. 'mitä tapahtuu?', 'näytä liikenne', 'onko jotain poikkeavaa?'), "
+                f"tulkitse se aina tarkoittamaan kyseistä valittua kartta-aluetta — älä kerro yleisistä globaaleista tai muiden alueiden tapahtumista. "
+                f"Jos jokin havainto tai tieto ei kuulu AOI-alueelle, jätä se mainitsematta."
             )
         graph = create_react_agent(llm, lc_tools)
 
@@ -285,7 +308,17 @@ async def run_agent_stream(
                     'detect_clusters','correlate_events',
                     'weather_area','fmi_observations','fmi_warnings',
                 }
-                raw_output = str(tool_output)
+                # LangGraph may return a ToolMessage or string — extract content
+                if hasattr(tool_output, "content"):
+                    raw_output = tool_output.content
+                    if isinstance(raw_output, list):
+                        # Multi-part content list — join text parts
+                        raw_output = "".join(
+                            p.get("text", "") if isinstance(p, dict) else str(p)
+                            for p in raw_output
+                        )
+                else:
+                    raw_output = str(tool_output)
                 limit = len(raw_output) if tool_name in MAP_TOOL_IDS else 8000
                 yield _sse({"type": "tool_end", "tool": tool_name, "output": raw_output[:limit]})
 

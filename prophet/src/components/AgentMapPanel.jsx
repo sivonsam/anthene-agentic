@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { API_BASE } from '../config'
 
 const STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+const DEV_TOKEN = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJkZXYtdXNlci0xIiwibmFtZSI6IkRldiBVc2VyIiwiZW1haWwiOiJkZXZAYW50aGVuZS5haSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTcwMDAwMDAwMH0.'
 
 function parseToolOutput(tool, inputStr, outputStr) {
   let input = {}, output = {}
@@ -26,7 +28,12 @@ function parseToolOutput(tool, inputStr, outputStr) {
         color,
         label: a.callsign || a.registration || a.hex || '?',
         popup: `${milBadge}✈️ ${a.callsign||a.hex}\n${emergBadge}${a.type||''} ${a.registration||''}\n${a.operator ? a.operator+'\n' : ''}⬆ ${a.altitude_ft||'?'} ft · �� ${a.ground_speed_kt||'?'} kt`,
-        layer:'adsb'
+        layer:'adsb',
+        trackable: true,
+        track_callsign: a.callsign || '',
+        track_registration: a.registration || '',
+        track_hex: a.hex || '',
+        track_label: a.callsign || a.registration || a.hex || '?',
       }})
     })
   }
@@ -226,6 +233,96 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
   const drawMarkers = useRef([])
   const drawingRef = useRef(false)
 
+  // Map ready flag — 'load' fires only once; map.loaded() goes false during tile loads
+  // so we track readiness ourselves to avoid registering a never-firing once('load',…)
+  const mapLoadedRef = useRef(false)
+
+  // Aircraft tracking state
+  const [trackedAc, setTrackedAc] = useState(null)   // { callsign, registration, hex, label }
+  const trackHistory = useRef([])                      // [[lon,lat], ...]  max 30 positions
+  const trackMarkerRef = useRef(null)
+  const trackIntervalRef = useRef(null)
+
+  async function fetchTrackPosition(info) {
+    try {
+      const tool = info.callsign ? 'adsb_by_callsign' : 'adsb_by_registration'
+      const body = info.callsign ? { callsign: info.callsign } : { registration: info.registration }
+      const res = await fetch(`${API_BASE}/api/tools/call/${tool}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${DEV_TOKEN}` },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      const aircraft = data.aircraft || (data.lat ? [data] : [])
+      return aircraft.find(a => a.lat && a.lon) || null
+    } catch { return null }
+  }
+
+  function updateTrackLayers(pos, acData) {
+    const map = mapInstance.current
+    if (!map || !mapLoadedRef.current) return
+    const history = trackHistory.current
+    const lineData = { type: 'Feature', geometry: { type: 'LineString', coordinates: history.length > 1 ? history : [] } }
+    if (map.getSource('track-trail')) {
+      map.getSource('track-trail').setData(lineData)
+    } else if (history.length > 1) {
+      map.addSource('track-trail', { type: 'geojson', data: lineData })
+      map.addLayer({ id: 'track-trail', type: 'line', source: 'track-trail',
+        paint: { 'line-color': '#60a5fa', 'line-width': 3, 'line-opacity': 0.85 } })
+    }
+    if (trackMarkerRef.current) {
+      trackMarkerRef.current.setLngLat(pos)
+    } else {
+      const el = document.createElement('div')
+      el.title = acData?.callsign || ''
+      el.style.cssText = 'width:22px;height:22px;background:#60a5fa;border:3px solid white;border-radius:50%;box-shadow:0 0 14px #60a5fa99;cursor:pointer;'
+      trackMarkerRef.current = new maplibregl.Marker({ element: el }).setLngLat(pos).addTo(map)
+    }
+    map.panTo(pos, { duration: 1000 })
+  }
+
+  async function doTrackUpdate(info) {
+    const ac = await fetchTrackPosition(info)
+    if (!ac) return
+    const pos = [ac.lon, ac.lat]
+    trackHistory.current = [...trackHistory.current.slice(-29), pos]
+    updateTrackLayers(pos, ac)
+  }
+
+  function startTracking(info) {
+    if (trackIntervalRef.current) clearInterval(trackIntervalRef.current)
+    trackHistory.current = []
+    setTrackedAc(info)
+    doTrackUpdate(info)
+    trackIntervalRef.current = setInterval(() => doTrackUpdate(info), 30000)
+  }
+
+  function stopTracking() {
+    if (trackIntervalRef.current) { clearInterval(trackIntervalRef.current); trackIntervalRef.current = null }
+    setTrackedAc(null)
+    trackHistory.current = []
+    if (trackMarkerRef.current) { trackMarkerRef.current.remove(); trackMarkerRef.current = null }
+    const map = mapInstance.current
+    if (map) {
+      if (map.getLayer('track-trail')) map.removeLayer('track-trail')
+      if (map.getSource('track-trail')) map.removeSource('track-trail')
+    }
+  }
+
+  // Register global callback for popup track buttons
+  useEffect(() => {
+    window.__antheneTrack = (callsign, registration, hex, label) => {
+      startTracking({ callsign, registration, hex, label })
+    }
+    return () => { delete window.__antheneTrack }
+  }, [])
+
+  // Cleanup tracking on unmount
+  useEffect(() => {
+    return () => { if (trackIntervalRef.current) clearInterval(trackIntervalRef.current) }
+  }, [])
+
   useEffect(() => {
     let center = [25, 62], zoom = 5
     if (agent?.aoi?.coordinates) {
@@ -247,6 +344,7 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
 
     map.on('load', () => {
+      mapLoadedRef.current = true
       if (agent?.aoi) {
         map.addSource('aoi', { type: 'geojson', data: agent.aoi })
         map.addLayer({ id: 'aoi-fill', type: 'fill', source: 'aoi', paint: { 'fill-color': '#7c6fcd', 'fill-opacity': 0.1 } })
@@ -254,8 +352,28 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
       }
     })
 
-    return () => map.remove()
+    return () => { mapLoadedRef.current = false; map.remove() }
   }, [])
+
+  // Render drawnAoi polygon on map whenever it changes
+  useEffect(() => {
+    const map = mapInstance.current
+    if (!map || !mapLoadedRef.current) return
+    const SRC = 'drawn-aoi'
+    if (map.getSource(SRC)) {
+      if (drawnAoi) {
+        map.getSource(SRC).setData(drawnAoi)
+      } else {
+        if (map.getLayer('drawn-aoi-fill')) map.removeLayer('drawn-aoi-fill')
+        if (map.getLayer('drawn-aoi-line')) map.removeLayer('drawn-aoi-line')
+        map.removeSource(SRC)
+      }
+    } else if (drawnAoi) {
+      map.addSource(SRC, { type: 'geojson', data: drawnAoi })
+      map.addLayer({ id: 'drawn-aoi-fill', type: 'fill', source: SRC, paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.08 } })
+      map.addLayer({ id: 'drawn-aoi-line', type: 'line', source: SRC, paint: { 'line-color': '#ef4444', 'line-width': 2 } })
+    }
+  }, [drawnAoi])
 
   useEffect(() => {
     const map = mapInstance.current
@@ -290,8 +408,21 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
         box-shadow: 0 2px 6px rgba(0,0,0,0.5);
       `
 
-      const popup = new maplibregl.Popup({ offset: 10 })
-        .setHTML(`<div style="white-space:pre;font-size:12px;color:#e2e8f0;background:#0f172a;padding:6px 10px;border-radius:6px;max-width:220px">${props.popup}</div>`)
+      let popupHtml
+      if (props.trackable) {
+        const cs = (props.track_callsign || '').replace(/'/g, "\\'")
+        const reg = (props.track_registration || '').replace(/'/g, "\\'")
+        const hex = (props.track_hex || '').replace(/'/g, "\\'")
+        const lbl = (props.track_label || '').replace(/'/g, "\\'")
+        popupHtml = `<div style="font-size:12px;color:#e2e8f0;background:#0f172a;padding:6px 10px;border-radius:6px;max-width:220px">
+          <pre style="margin:0 0 6px;white-space:pre-wrap">${props.popup}</pre>
+          <button onclick="window.__antheneTrack('${cs}','${reg}','${hex}','${lbl}')" style="font-size:11px;background:#1e3a5f;border:1px solid #60a5fa;border-radius:12px;padding:2px 10px;color:#60a5fa;cursor:pointer;width:100%">🎯 Seuraa kartalla</button>
+        </div>`
+      } else {
+        popupHtml = `<div style="white-space:pre;font-size:12px;color:#e2e8f0;background:#0f172a;padding:6px 10px;border-radius:6px;max-width:220px">${props.popup}</div>`
+      }
+
+      const popup = new maplibregl.Popup({ offset: 10 }).setHTML(popupHtml)
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([lon, lat])
@@ -316,40 +447,77 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
 
     setLayerCounts(counts)
     } // applyMarkers
-    if (map.loaded()) applyMarkers()
+    // Use mapLoadedRef instead of map.loaded() — loaded() returns false during tile loads
+    // even after initial 'load' fired, causing once('load',…) to never fire again
+    if (mapLoadedRef.current) applyMarkers()
     else map.once('load', applyMarkers)
   }, [toolResults])
+
+  function _updatePreview(verts) {
+    const map = mapInstance.current
+    if (!map) return
+    const PSRC = 'draw-preview'
+    const lineData = {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: verts.length > 1 ? verts : [] }
+    }
+    if (map.getSource(PSRC)) {
+      map.getSource(PSRC).setData(lineData)
+    } else {
+      map.addSource(PSRC, { type: 'geojson', data: lineData })
+      map.addLayer({ id: 'draw-preview-line', type: 'line', source: PSRC,
+        paint: { 'line-color': '#ef4444', 'line-width': 2, 'line-dasharray': [4, 2] } })
+    }
+  }
+
+  function _removePreview() {
+    const map = mapInstance.current
+    if (!map) return
+    if (map.getLayer('draw-preview-line')) map.removeLayer('draw-preview-line')
+    if (map.getSource('draw-preview')) map.removeSource('draw-preview')
+  }
 
   function startDraw() {
     const map = mapInstance.current
     if (!map) return
+    // clear any existing drawn AOI
+    setDrawnAoi(null)
     drawVertices.current = []
     drawMarkers.current.forEach(m => m.remove())
     drawMarkers.current = []
+    _removePreview()
     drawingRef.current = true
     setDrawing(true)
     map.getCanvas().style.cursor = 'crosshair'
+    map.doubleClickZoom.disable()
 
     const onClick = (e) => {
       if (!drawingRef.current) return
       const pt = [e.lngLat.lng, e.lngLat.lat]
-      drawVertices.current = [...drawVertices.current, pt]
+      const newVerts = [...drawVertices.current, pt]
+      drawVertices.current = newVerts
       const el = document.createElement('div')
-      el.style.cssText = 'width:8px;height:8px;background:#ef4444;border:2px solid white;border-radius:50%;'
+      el.style.cssText = 'width:8px;height:8px;background:#ef4444;border:2px solid white;border-radius:50%;cursor:crosshair;pointer-events:none;'
       const marker = new maplibregl.Marker({ element: el }).setLngLat(pt).addTo(map)
       drawMarkers.current.push(marker)
+      _updatePreview(newVerts)
     }
     const onDblClick = (e) => {
-      if (!drawingRef.current || drawVertices.current.length < 3) return
+      if (!drawingRef.current) return
       e.preventDefault()
       map.off('click', onClick)
       map.off('dblclick', onDblClick)
       drawingRef.current = false
       setDrawing(false)
       map.getCanvas().style.cursor = ''
+      map.doubleClickZoom.enable()
       drawMarkers.current.forEach(m => m.remove())
       drawMarkers.current = []
-      const ring = [...drawVertices.current, drawVertices.current[0]]
+      _removePreview()
+      // dblclick fires two click events first — remove those 2 extra vertices
+      const verts = drawVertices.current.slice(0, -2)
+      if (verts.length < 3) return
+      const ring = [...verts, verts[0]]
       const geom = { type: 'Polygon', coordinates: [ring] }
       setDrawnAoi(geom)
       if (onAoiChange) onAoiChange(geom)
@@ -360,6 +528,9 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
 
   function clearDraw() {
     setDrawnAoi(null)
+    drawMarkers.current.forEach(m => m.remove())
+    drawMarkers.current = []
+    drawVertices.current = []
     if (onAoiChange) onAoiChange(null)
   }
 
@@ -389,6 +560,12 @@ export default function AgentMapPanel({ agent, toolResults = [], onAoiChange }) 
           </span>
         ))}
         {!hasData && <span style={{ fontSize: '.72rem', color: '#3a5070' }}>Odottaa työkalukutsuja…</span>}
+        {trackedAc && (
+          <span style={{ fontSize: '.7rem', background: '#1e3a5f', border: '1px solid #60a5fa60', borderRadius: 20, padding: '2px 10px', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 6 }}>
+            📡 {trackedAc.label}
+            <button onClick={stopTracking} title="Lopeta seuranta" style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: '1rem', lineHeight: 1 }}>✕</button>
+          </span>
+        )}
       </div>
       <div ref={mapRef} style={{ flex: 1 }} />
     </div>

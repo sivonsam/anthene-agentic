@@ -28,6 +28,7 @@ from tools.gdacs import gdacs_alerts
 from tools.vessels import vessels_area, vessels_bbox
 from tools.web_search import web_search
 from tools.calculator import calculator
+from tools.telegram import telegram_alert
 from tools.analysis import detect_clusters, correlate_events
 
 TOOL_REGISTRY: dict[str, dict] = {
@@ -362,6 +363,27 @@ TOOL_REGISTRY: dict[str, dict] = {
         "avoindata_category": "tiede-ja-teknologia",
         "avoindata_category_label": "Tiede ja teknologia",
         "source_org": "Anthene",
+        "license": "Internal",
+        "open_data": False,
+        "avoindata_url": None,
+    },
+    # ── Notifications ─────────────────────────────────────────
+    "telegram_alert": {
+        "fn": telegram_alert,
+        "name": "Telegram-hälytys",
+        "description": (
+            "Lähettää henkilökohtaisen Telegram-viestin käyttäjälle @AntheneAgenticBot-botin kautta. "
+            "Käytä hälytys-agentin toiminnassa: lähetä viesti kun havaitset poikkeaman tai kynnysarvo ylittyy. "
+            "Severity-arvot: 'info', 'warning', 'critical'."
+        ),
+        "parameters": {
+            "message": {"type": "string", "description": "Viestin teksti suomeksi"},
+            "severity": {"type": "string", "description": "Vakavuus: info | warning | critical (oletus: info)"},
+            "chat_id": {"type": "string", "description": "Käyttäjän Telegram chat_id (injektoidaan automaattisesti)"},
+        },
+        "avoindata_category": "tiede-ja-teknologia",
+        "avoindata_category_label": "Tiede ja teknologia",
+        "source_org": "Anthene / Telegram",
         "license": "Internal",
         "open_data": False,
         "avoindata_url": None,

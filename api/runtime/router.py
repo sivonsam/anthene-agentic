@@ -57,7 +57,7 @@ async def run_agent(
     await cosmos.create_run(run_doc)
 
     async def event_stream():
-        async for chunk in run_agent_stream(agent_def, body.message, session_id, run_id):
+        async for chunk in run_agent_stream(agent_def, body.message, session_id, run_id, user_id=user.id):
             yield chunk
         # Mark run complete
         await cosmos.update_run(run_id, agent_id, {
