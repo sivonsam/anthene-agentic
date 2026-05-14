@@ -248,7 +248,7 @@ export default function App() {
                   )}
                 {testingAgent && (
                   <div className="test-panel-wrap" style={{ maxWidth: '100%' }}>
-                    <TestChat agent={testingAgent} onRun={handleRunTest(testingAgent)} />
+                    <TestChat key={testingAgent?.id} agent={testingAgent} onRun={handleRunTest(testingAgent)} />
                   </div>
                 )}
               </section>
@@ -314,7 +314,7 @@ export default function App() {
                       loading={formLoading}
                     />
                     {editingAgent && editingAgent.id !== '__prefill__' && (
-                      <TestChat agent={editingAgent} onRun={handleRunTest(editingAgent)} />
+                      <TestChat key={editingAgent?.id} agent={editingAgent} onRun={handleRunTest(editingAgent)} />
                     )}
                   </div>
                 )}

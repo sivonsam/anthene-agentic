@@ -130,7 +130,7 @@ export default function AgentPreview({ agent, onClose, onRun, onCopy }) {
 
           {onRun && (
             <div className="preview-chat">
-              <TestChat agent={agent} onRun={onRun} />
+              <TestChat key={agent?.id} agent={agent} onRun={onRun} />
             </div>
           )}
         </div>
