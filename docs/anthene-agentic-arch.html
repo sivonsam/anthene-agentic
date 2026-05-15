@@ -183,7 +183,7 @@ footer strong{color:#3a5070}
   <span class="topbar-hex">⚡</span>
   <div>
     <div class="topbar-name">Anthene Agentic</div>
-    <div class="topbar-sub">Architecture · v2.5 · Sweden Central</div>
+    <div class="topbar-sub">Architecture · v2.6 · Sweden Central</div>
   </div>
   <div class="topbar-badges">
     <a class="back-link" href="/portal.html">← Portal</a>
@@ -348,7 +348,7 @@ footer strong{color:#3a5070}
     <div class="arch-arrow">⬇ ⬇ ⬇</div>
 
     <div class="arch-layer layer-tools">
-      <div class="arch-label label-tools">🛠️ Tool Hub — 23 työkalua · Sisäinen Container App</div>
+      <div class="arch-label label-tools">🛠️ Tool Hub — 25 työkalua · Sisäinen Container App</div>
       <div class="arch-comps">
         <span class="ac ac-tools">✈️ ADS-B Exchange (6)</span>
         <span class="ac ac-tools">🌊 MarineTraffic / AIS (3)</span>
@@ -431,6 +431,55 @@ footer strong{color:#3a5070}
     Agentti kutsuu <span style="color:#ef4444">telegram_alert</span>-työkalua
     → Tool Hub → Telegram Bot API → @AntheneAgenticBot
     → henkilökohtainen kanava (chat_id per käyttäjä)
+    → executor tallentaa hälytyksen myös Cosmos DB:hen → Alerts UI näyttää sen<br><br>
+    <span style="color:#44aaff;font-weight:700">Suora seurantalinkki (v2.6):</span>
+    <code style="color:#7dd3fc">https://green-glacier-0ec1a7c03.7.azurestaticapps.net?track=CALLSIGN</code>
+    → Prophet avautuu suoraan karttanäkymään → automaattinen seuranta callsignilla tai rekisteritunnuksella
+    → 5s päivitysväli, sininen pulssimarkkeri kartalla<br><br>
+    <span style="color:#a78bfa;font-weight:700">ADD_TOOL chat-nappi (v2.6):</span>
+    Agentti vastaa <code>[ADD_TOOL: tool_id | Nimi]</code>
+    → TestChat renderöi klikkattavan ➕-napin → nappia painamalla työkalu lisätään agenttiin suoraan API PATCH -kutsulla ilman Creator-sivulle siirtymistä
+  </div>
+</div>
+</div>
+
+<!-- Frontend features v2.6 -->
+<div class="sec">
+  <div class="sec-title"><span class="sec-title-icon">🖥️</span> Frontend-ominaisuudet v2.6</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.85rem">
+    <div style="background:#0a1525;border:1px solid #44aaff30;border-radius:12px;padding:1rem">
+      <div style="color:#44aaff;font-weight:700;margin-bottom:.5rem">📡 Suora seurantalinkki</div>
+      <div style="font-size:.8rem;color:#4a6080;line-height:1.6">
+        <code style="color:#7dd3fc;font-size:.75rem">?track=FIH40</code> tai <code style="color:#7dd3fc;font-size:.75rem">?track=OH-HMG</code><br>
+        Callsign tai rekisteritunnus URL-parametrissa.<br>
+        Prophet siirtyy karttanäkymään automaattisesti ja aloittaa seurannan. Päivitysväli 5s.
+      </div>
+    </div>
+    <div style="background:#0a1525;border:1px solid #a78bfa30;border-radius:12px;padding:1rem">
+      <div style="color:#a78bfa;font-weight:700;margin-bottom:.5rem">➕ ADD_TOOL chat-nappi</div>
+      <div style="font-size:.8rem;color:#4a6080;line-height:1.6">
+        Kun agentti tunnistaa puuttuvan työkalun, se vastaa <code>[ADD_TOOL: id | Nimi]</code>.<br>
+        TestChat renderöi tämän klikattavaksi napiksi. Napin painaminen kutsuu PATCH /api/agents/{id} ja lisää työkalun suoraan.
+      </div>
+    </div>
+    <div style="background:#0a1525;border:1px solid #34d39930;border-radius:12px;padding:1rem">
+      <div style="color:#34d399;font-weight:700;margin-bottom:.5rem">🎨 Ilma-aluskategoriat</div>
+      <div style="font-size:.8rem;color:#4a6080;line-height:1.6">
+        7 kategoriaa eri väreillä kartalla:<br>
+        🪖 Military #ff9900 · 🚁 Helicopter #44aaff<br>
+        🛸 UAV/drone #ff8800 · 🪂 Glider #c084fc<br>
+        🎈 Balloon #ffdd00 · 🚨 Emergency #ff3333<br>
+        ✈️ Commercial #00cc88
+      </div>
+    </div>
+    <div style="background:#0a1525;border:1px solid #fbbf2430;border-radius:12px;padding:1rem">
+      <div style="color:#fbbf24;font-weight:700;margin-bottom:.5rem">⛔ Agent guardrails</div>
+      <div style="font-size:.8rem;color:#4a6080;line-height:1.6">
+        Kriittinen sääntö system promptin alussa (ennen käyttäjän promptia).<br>
+        Kieltää ulkoiset palvelut (Flightradar24, ADS-B Exchange jne.).<br>
+        Pakottaa Anthene-linkkien käytön vastauksissa.
+      </div>
+    </div>
   </div>
 </div>
 </div>
@@ -546,27 +595,29 @@ footer strong{color:#3a5070}
 ═══════════════════════════════════════════════════════ -->
 <div id="tab-tools" class="tab-pane">
 <div class="sec">
-  <div class="sec-title"><span class="sec-title-icon">🛠️</span> Työkalukataloogi — 23 työkalua</div>
+  <div class="sec-title"><span class="sec-title-icon">🛠️</span> Työkalukataloogi — 25 työkalua</div>
   <div class="tool-cats">
 
     <div class="cat-block">
-      <div class="cat-hdr"><span class="cat-ic">✈️</span><span class="cat-nm">Ilmaliikenne (ADS-B)</span><span class="cat-cnt">6 työkalua</span></div>
+      <div class="cat-hdr"><span class="cat-ic">✈️</span><span class="cat-nm">Ilmaliikenne (ADS-B)</span><span class="cat-cnt">8 työkalua</span></div>
       <div class="tools-grid">
-        <div class="tool"><div class="tool-id">adsb_area</div><div class="tool-nm">ADS-B aluehaku</div><div class="tool-dc">Lentokoneet annetulla lat/lon/radius-alueella. Palauttaa callsign, tyyppi, korkeus, nopeus, sotilas-lippu.</div></div>
-        <div class="tool"><div class="tool-id">adsb_flight</div><div class="tool-nm">Lennon tiedot</div><div class="tool-dc">Yksittäisen lennon tiedot ICAO hex-koodilla tai lentonumerolla.</div></div>
-        <div class="tool"><div class="tool-id">adsb_trail</div><div class="tool-nm">Lentorata</div><div class="tool-dc">Lennon historiallinen reitti pistejonona. Visualisoidaan kartalle.</div></div>
+        <div class="tool"><div class="tool-id">adsb_area</div><div class="tool-nm">ADS-B aluehaku</div><div class="tool-dc">Lentokoneet annetulla lat/lon/radius-alueella. Palauttaa callsign, tyyppi, korkeus, nopeus, sotilas-lippu. Kategoriat: military🪖 helicopter🚁 uav🛸 glider🪂 balloon🎈 commercial✈️</div></div>
         <div class="tool"><div class="tool-id">adsb_military</div><div class="tool-nm">Sotilaslentokoneet</div><div class="tool-dc">Sotilasluokiteltujen lentokoneiden haku alueelta.</div></div>
-        <div class="tool"><div class="tool-id">adsb_by_callsign</div><div class="tool-nm">Haku kutsukirjaimella</div><div class="tool-dc">Reaaliaikainen sijainti kutsumerkin perusteella. Käytetään karttaseurantaan.</div></div>
-        <div class="tool"><div class="tool-id">adsb_by_registration</div><div class="tool-nm">Haku rekisterillä</div><div class="tool-dc">Reaaliaikainen sijainti rekisteritunnuksen perusteella. Käytetään karttaseurantaan.</div></div>
+        <div class="tool"><div class="tool-id">adsb_emergency</div><div class="tool-nm">Hätätilanne-squawk</div><div class="tool-dc">Koneet joilla squawk 7700/7600/7500 aktiivisena.</div></div>
+        <div class="tool"><div class="tool-id">adsb_by_callsign</div><div class="tool-nm">Haku kutsukirjaimella</div><div class="tool-dc">Reaaliaikainen sijainti kutsumerkin perusteella. Käytetään ?track=CALLSIGN seurantalinkeissä.</div></div>
+        <div class="tool"><div class="tool-id">adsb_by_registration</div><div class="tool-nm">Haku rekisterillä</div><div class="tool-dc">Reaaliaikainen sijainti rekisteritunnuksen perusteella. Toimii ?track=OH-HMG -tyyppisillä linkeillä.</div></div>
+        <div class="tool"><div class="tool-id">adsb_by_squawk</div><div class="tool-nm">Haku squawk-koodilla</div><div class="tool-dc">Kaikki koneet joilla tietty squawk: 7700=hätä, 7600=radio, 7500=kaappaus.</div></div>
+        <div class="tool"><div class="tool-id">adsb_by_type</div><div class="tool-nm">Haku ICAO-tyypillä</div><div class="tool-dc">Kaikki tietyn tyyppiset koneet ilmassa (esim. B738, A320).</div></div>
+        <div class="tool"><div class="tool-id">aircraft_detail</div><div class="tool-nm">Koneen tiedot</div><div class="tool-dc">Yksityiskohtaiset tiedot yksittäisestä koneesta ICAO hex-koodilla.</div></div>
       </div>
     </div>
 
     <div class="cat-block">
-      <div class="cat-hdr"><span class="cat-ic">🌊</span><span class="cat-nm">Meriliikenne (AIS)</span><span class="cat-cnt">3 työkalua</span></div>
+      <div class="cat-hdr"><span class="cat-ic">🌊</span><span class="cat-nm">Meriliikenne (AIS / Digitraffic)</span><span class="cat-cnt">3 työkalua</span></div>
       <div class="tools-grid">
-        <div class="tool"><div class="tool-id">ais_area</div><div class="tool-nm">AIS aluehaku</div><div class="tool-dc">Alukset annetulla merialueella: MMSI, nimi, tyyppi, nopeus, kurssi.</div></div>
-        <div class="tool"><div class="tool-id">ais_vessel</div><div class="tool-nm">Aluksen tiedot</div><div class="tool-dc">Yksittäisen aluksen tiedot MMSI-numerolla.</div></div>
-        <div class="tool"><div class="tool-id">ais_trail</div><div class="tool-nm">Aluksen reitti</div><div class="tool-dc">Aluksen historiallinen reitti ja satamakäynnit.</div></div>
+        <div class="tool"><div class="tool-id">vessels_area</div><div class="tool-nm">AIS aluehaku</div><div class="tool-dc">Alukset annetulla merialueella (Digitraffic, julkinen API). Palauttaa MMSI, nopeus, kurssi, nav_status.</div></div>
+        <div class="tool"><div class="tool-id">vessels_bbox</div><div class="tool-nm">AIS bbox-haku</div><div class="tool-dc">Alukset bounding box -alueella. Käytetään AOI-hakuihin.</div></div>
+        <div class="tool"><div class="tool-id">vessel_detail</div><div class="tool-nm">Aluksen tiedot</div><div class="tool-dc">Yksittäisen aluksen tiedot MMSI-numerolla.</div></div>
       </div>
     </div>
 

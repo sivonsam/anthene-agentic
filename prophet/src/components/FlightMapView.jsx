@@ -152,12 +152,13 @@ function AoiChatPanel({ aoi, aircraftInAoi, getToken, onClose }) {
 }
 
 // ── Main FlightMapView ────────────────────────────────────────────────────────
-export default function FlightMapView({ api, getToken }) {
+export default function FlightMapView({ api, getToken, autoTrack = null }) {
   const mapContainer = useRef(null)
   const map = useRef(null)
   const draw = useRef(null)
   const popup = useRef(null)
   const pollTimer = useRef(null)
+  const autoTrackMarker = useRef(null)
 
   const [mapStyle, setMapStyle] = useState('night')
   const [aircraft, setAircraft] = useState([])
@@ -166,6 +167,7 @@ export default function FlightMapView({ api, getToken }) {
   const [chatAoi, setChatAoi] = useState(null)
   const [drawing, setDrawing] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [trackedInfo, setTrackedInfo] = useState(null) // { label, lat, lon }
 
   // ── Fetch aircraft ──────────────────────────────────────────────────────────
   const fetchAircraft = useCallback(async () => {
@@ -182,19 +184,52 @@ export default function FlightMapView({ api, getToken }) {
         flight: ac.callsign || '',
         r: ac.registration || '',
         t: ac.type || '',
-        category_label: ac.military
-          ? 'military'
-          : ac.emergency
-            ? 'emergency'
-            : ac.type?.startsWith?.('H')
-              ? 'helicopter'
-              : 'commercial',
+        category_label: (() => {
+          if (ac.military) return 'military'
+          if (ac.emergency || ac.squawk_alert) return 'emergency'
+          // Use category_label from toolhub (_CATEGORY_MAP) when available
+          const cl = ac.category_label || ''
+          if (cl === 'rotorcraft') return 'helicopter'
+          if (cl === 'drone_uav') return 'uav'
+          if (cl === 'glider') return 'glider'
+          if (cl === 'balloon') return 'balloon'
+          if (cl === 'unknown') return 'unidentified'
+          if (['light','small','large','high_vortex','heavy','high_performance'].includes(cl)) return 'commercial'
+          // Fallback: use ICAO type prefix (H=helicopter, etc.)
+          if (ac.type?.startsWith?.('H')) return 'helicopter'
+          if (ac.type?.startsWith?.('B')) return 'balloon'
+          return 'commercial'
+        })(),
       }))
       setAircraft(normalized)
     } catch (e) {
       console.warn('adsb fetch failed', e)
     }
   }, [api])
+
+  // ── Auto-track specific aircraft from URL param ─────────────────────────────
+  useEffect(() => {
+    if (!autoTrack || !aircraft.length || !map.current) return
+    const val = autoTrack.toUpperCase()
+    const target = aircraft.find(ac =>
+      (ac.flight || '').toUpperCase().trim() === val ||
+      (ac.r || '').toUpperCase().replace(/-/g, '') === val.replace(/-/g, '')
+    )
+    if (!target || !target.lat || !target.lon) return
+    setTrackedInfo({ label: target.flight || target.r || val, lat: target.lat, lon: target.lon })
+    // Center map on target
+    map.current.easeTo({ center: [target.lon, target.lat], zoom: 9, duration: 1000 })
+    // Show/update marker
+    if (autoTrackMarker.current) {
+      autoTrackMarker.current.setLngLat([target.lon, target.lat])
+    } else {
+      const el = document.createElement('div')
+      el.style.cssText = 'width:22px;height:22px;border-radius:50%;background:#44aaff;border:3px solid #fff;box-shadow:0 0 10px #44aaff;animation:pulse 1.5s infinite;'
+      autoTrackMarker.current = new maplibregl.Marker({ element: el })
+        .setLngLat([target.lon, target.lat])
+        .addTo(map.current)
+    }
+  }, [aircraft, autoTrack])
 
   // ── Update map source when aircraft changes ─────────────────────────────────
   useEffect(() => {
@@ -456,6 +491,20 @@ export default function FlightMapView({ api, getToken }) {
 
   return (
     <div className="flight-map-root">
+      {/* Auto-track banner */}
+      {autoTrack && (
+        <div style={{
+          position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 100, background: '#0f2a4a', border: '1px solid #44aaff',
+          borderRadius: 8, padding: '6px 16px', color: '#44aaff',
+          fontSize: '0.85rem', fontWeight: 600, pointerEvents: 'none',
+          boxShadow: '0 2px 12px rgba(68,170,255,0.3)'
+        }}>
+          📡 Seurataan: {trackedInfo?.label || autoTrack}
+          {trackedInfo && ` · ${trackedInfo.lat.toFixed(4)}°N ${trackedInfo.lon.toFixed(4)}°E`}
+          {!trackedInfo && ' · Haetaan sijaintia…'}
+        </div>
+      )}
       {/* Sidebar toggle */}
       <button
         className={`flight-sidebar-toggle ${sidebarOpen ? '' : 'collapsed'}`}

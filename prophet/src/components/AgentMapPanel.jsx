@@ -21,13 +21,19 @@ function parseToolOutput(tool, inputStr, outputStr) {
       if (!a.lat || !a.lon) return
       const isEmerg = a.emergency || a.squawk_alert
       const isMil = a.military
-      const color = isEmerg ? '#ff3333' : isMil ? '#ff9900' : '#00cc88'
+      const cl = a.category_label || ''
+      const isHeli = cl === 'rotorcraft' || a.type?.startsWith?.('H')
+      const isUav = cl === 'drone_uav'
+      const isGlider = cl === 'glider'
+      const isBalloon = cl === 'balloon' || a.type?.startsWith?.('B')
+      const color = isEmerg ? '#ff3333' : isMil ? '#ff9900' : isHeli ? '#44aaff' : isUav ? '#ff8800' : isGlider ? '#c084fc' : isBalloon ? '#ffdd00' : '#00cc88'
       const emergBadge = isEmerg ? `🚨 ${a.emergency || a.squawk_alert}\n` : ''
       const milBadge = isMil ? '🪖 ' : ''
+      const typeBadge = isHeli ? '🚁' : isUav ? '🛸' : isGlider ? '🪂' : isBalloon ? '🎈' : '✈️'
       features.push({ type:'Feature', geometry:{ type:'Point', coordinates:[a.lon,a.lat] }, properties:{
         color,
         label: a.callsign || a.registration || a.hex || '?',
-        popup: `${milBadge}✈️ ${a.callsign||a.hex}\n${emergBadge}${a.type||''} ${a.registration||''}\n${a.operator ? a.operator+'\n' : ''}⬆ ${a.altitude_ft||'?'} ft · �� ${a.ground_speed_kt||'?'} kt`,
+        popup: `${milBadge}${typeBadge} ${a.callsign||a.hex}\n${emergBadge}${a.type||''} ${a.registration||''}\n${a.operator ? a.operator+'\n' : ''}⬆ ${a.altitude_ft||'?'} ft · 💨 ${a.ground_speed_kt||'?'} kt`,
         layer:'adsb',
         trackable: true,
         track_callsign: a.callsign || '',

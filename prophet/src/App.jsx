@@ -124,7 +124,9 @@ function MsalGate() {
 
 // ── Main Prophet dashboard ───────────────────────────────────────────────────
 function Prophet({ user, getToken, onLogout }) {
-  const [view, setView] = useState('dashboard')
+  // Read ?track= immediately so initial view can be set before first render
+  const urlTrack = new URLSearchParams(window.location.search).get('track') || null
+  const [view, setView] = useState(() => urlTrack ? 'kartta' : 'dashboard')
   const [agents, setAgents] = useState([])
   const [storeAgents, setStoreAgents] = useState([])
   const [loading, setLoading] = useState(false)
@@ -223,7 +225,24 @@ function Prophet({ user, getToken, onLogout }) {
     setView('sessiot')
   }
 
-  // ── Pin helpers ─────────────────────────────────────────────────────────────
+  // ── Add tool to agent from chat ADD_TOOL button ─────────────────────────────
+  const makeOnAddTool = (agent) => async (toolId, toolName) => {
+    if (!agent?.id) return
+    const currentTools = agent.tools || []
+    if (currentTools.includes(toolId)) return
+    try {
+      await api.updateAgent(agent.id, { tools: [...currentTools, toolId] })
+      // Refresh agents list
+      const [myAgents] = await Promise.all([api.listMyAgents()])
+      setAgents(myAgents)
+      // Update activeAgent with fresh data
+      const fresh = myAgents.find(a => a.id === agent.id)
+      if (fresh) setActiveAgent(fresh)
+      alert(`✅ Työkalu "${toolName}" lisätty agenttiin "${agent.name}". Voit nyt käyttää sitä tässä sessiossa.`)
+    } catch (e) {
+      alert(`❌ Työkalun lisääminen epäonnistui: ${e.message}`)
+    }
+  }
   const togglePin = (agentId) => {
     setPinnedIds(prev => {
       const updated = prev.includes(agentId)
@@ -466,12 +485,14 @@ function Prophet({ user, getToken, onLogout }) {
               initialMessages={getChatData(activeSessionId).messages}
               initialToolResults={getChatData(activeSessionId).toolResults}
               onSave={makeSaveChat(activeSessionId)}
+              autoTrack={urlTrack}
+              onAddTool={makeOnAddTool(activeAgent)}
             />
           )}
 
           {/* ── Lentoanalyysi ─────────────────────────────────────────────── */}
           {view === 'kartta' && (
-            <FlightMapView api={api} getToken={getToken} />
+            <FlightMapView api={api} getToken={getToken} autoTrack={urlTrack} />
           )}
         </div>
       </div>
@@ -774,7 +795,7 @@ function SessiotView({ sessions, allAgentMap, onContinue, onLaunchNew }) {
 }
 
 // ── Aktiivinen sessio ─────────────────────────────────────────────────────────
-function AktiivisenSessioView({ agent, sessionId, onRun, onClose, initialMessages, initialToolResults, onSave }) {
+function AktiivisenSessioView({ agent, sessionId, onRun, onClose, initialMessages, initialToolResults, onSave, autoTrack = null, onAddTool = null }) {
   return (
     <div className="sessio-view">
       <div className="sessio-chat-area">
@@ -792,7 +813,9 @@ function AktiivisenSessioView({ agent, sessionId, onRun, onClose, initialMessage
           <TestChat agent={agent} onRun={onRun}
             initialMessages={initialMessages}
             initialToolResults={initialToolResults}
-            onSave={onSave} />
+            onSave={onSave}
+            autoTrack={autoTrack}
+            onAddTool={onAddTool} />
         </div>
       </div>
 

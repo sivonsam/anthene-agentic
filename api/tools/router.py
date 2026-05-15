@@ -27,6 +27,6 @@ async def list_tools(user: CurrentUser = Depends(get_current_user)):
 async def call_tool(tool_id: str, body: dict[str, Any], user: CurrentUser = Depends(get_current_user)):
     """Proxy a tool call to the Tool Hub."""
     async with httpx.AsyncClient(timeout=30, follow_redirects=True, verify=False) as client:
-        resp = await client.post(f"{TOOLHUB_URL}/tools/call/{tool_id}", json=body)
+        resp = await client.post(f"{TOOLHUB_URL}/tools/call/{tool_id}", json={"args": body})
         resp.raise_for_status()
         return resp.json()

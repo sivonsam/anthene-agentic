@@ -14,7 +14,7 @@ const MAP_TOOLS = new Set([
   'map_geocode','detect_clusters','correlate_events',
 ])
 
-export default function TestChat({ agent, onRun, initialMessages = [], initialToolResults = [], onSave }) {
+export default function TestChat({ agent, onRun, initialMessages = [], initialToolResults = [], onSave, autoTrack = null, onAddTool = null }) {
   const [messages, setMessages] = useState(initialMessages)
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -36,6 +36,37 @@ export default function TestChat({ agent, onRun, initialMessages = [], initialTo
 
   const effectiveAoi = localAoi || agent?.aoi || null
   const isMapBound = effectiveAoi || agent?.tools?.some(t => MAP_TOOLS.has(t))
+
+  // Parse [ADD_TOOL: id | name] markers into clickable buttons
+  function renderContent(content) {
+    const ADD_TOOL_RE = /\[ADD_TOOL:\s*([^\]|]+?)\s*\|\s*([^\]]+?)\s*\]/g
+    const parts = []
+    let lastIndex = 0, match
+    ADD_TOOL_RE.lastIndex = 0
+    while ((match = ADD_TOOL_RE.exec(content)) !== null) {
+      if (match.index > lastIndex) parts.push(content.slice(lastIndex, match.index))
+      const toolId = match[1].trim()
+      const toolName = match[2].trim()
+      parts.push(
+        <button
+          key={`add-tool-${toolId}`}
+          onClick={() => onAddTool?.(toolId, toolName)}
+          disabled={!onAddTool}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            margin: '4px 0', padding: '5px 12px', borderRadius: 6,
+            background: '#0f3460', border: '1px solid #2a6496', color: '#7dc8f7',
+            cursor: onAddTool ? 'pointer' : 'default', fontSize: '0.82rem', fontWeight: 600,
+          }}
+        >
+          ➕ Lisää työkalu: {toolName}
+        </button>
+      )
+      lastIndex = ADD_TOOL_RE.lastIndex
+    }
+    if (lastIndex < content.length) parts.push(content.slice(lastIndex))
+    return parts
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -115,7 +146,7 @@ export default function TestChat({ agent, onRun, initialMessages = [], initialTo
       {/* Map panel — left side when map-bound */}
       {isMapBound && (
         <div style={{ flex: 1, minWidth: 0, borderRight: '1px solid #1e3a5f' }}>
-          <AgentMapPanel agent={agent} toolResults={toolResults} onAoiChange={setLocalAoi} />
+          <AgentMapPanel agent={agent} toolResults={toolResults} onAoiChange={setLocalAoi} autoTrack={autoTrack} />
         </div>
       )}
 
@@ -137,7 +168,7 @@ export default function TestChat({ agent, onRun, initialMessages = [], initialTo
             <div key={i} className={`chat-msg chat-msg-${msg.role}`}>
               <span className="chat-role">{msg.role === 'user' ? '👤' : msg.role === 'error' ? '❌' : '🤖'}</span>
               <span className="chat-content">
-                {msg.content}
+                {msg.role === 'assistant' ? renderContent(msg.content) : msg.content}
                 {msg.streaming && <span className="blink">▌</span>}
               </span>
             </div>

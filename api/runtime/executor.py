@@ -72,15 +72,9 @@ def _build_lc_tool(tool_meta: dict, aoi_bbox: dict | None = None, extra_defaults
 
     _type_map = {"number": float, "integer": int, "string": str, "boolean": bool}
     field_defs: dict = {}
-    for pname, pinfo in parameters.items():
-        py_type = _type_map.get(pinfo.get("type", "string"), str)
-        field_defs[pname] = (py_type, Field(default=None, description=pinfo.get("description", "")))
-
-    InputModel: type[BaseModel] | None = (
-        create_model(f"{tool_name}_args", **field_defs) if field_defs else None
-    )
 
     # Pre-fill geo defaults from AOI bounding box + any extra defaults (e.g. chat_id)
+    # Build this BEFORE field_defs so we can decide which params are optional
     _geo_defaults: dict = {}
     if aoi_bbox and parameters:
         for pname in parameters:
@@ -88,6 +82,26 @@ def _build_lc_tool(tool_meta: dict, aoi_bbox: dict | None = None, extra_defaults
                 _geo_defaults[pname] = aoi_bbox[pname]
     if extra_defaults:
         _geo_defaults.update(extra_defaults)
+
+    for pname, pinfo in parameters.items():
+        py_type = _type_map.get(pinfo.get("type", "string"), str)
+        desc = pinfo.get("description", "")
+        # Mark as required (no default) if: not pre-filled by AOI/extra AND not explicitly optional
+        has_aoi_default = pname in _geo_defaults
+        is_optional = (
+            pinfo.get("required") is False
+            or "optional" in desc.lower()
+            or "default" in desc.lower()
+            or has_aoi_default
+        )
+        if is_optional:
+            field_defs[pname] = (py_type | None, Field(default=None, description=desc))
+        else:
+            field_defs[pname] = (py_type, Field(description=desc))
+
+    InputModel: type[BaseModel] | None = (
+        create_model(f"{tool_name}_args", **field_defs) if field_defs else None
+    )
 
     async def _call(**kwargs) -> str:
         merged = {**_geo_defaults, **{k: v for k, v in kwargs.items() if v is not None}}
@@ -217,7 +231,20 @@ async def run_agent_stream(
         llm = _make_llm(agent_def.get("model", "gpt-4o"))
 
         # Build system prompt — append AOI context when defined
-        system_prompt = agent_def.get("system_prompt", "You are a helpful assistant.")
+        base_prompt = agent_def.get("system_prompt", "You are a helpful assistant.")
+
+        # CRITICAL rule prepended before user prompt so LLM sees it first
+        critical_prefix = (
+            "⛔ PAKOLLINEN SÄÄNTÖ — lue ennen kaikkea muuta: "
+            "ÄLÄ KOSKAAN mainitse, linkitä tai ehdota ulkoisia palveluita kuten Flightradar24, "
+            "ADS-B Exchange, MarineTraffic, Windy, Telegram-ryhmät tai MITÄÄN muuta kolmannen osapuolen palvelua. "
+            "Kun käyttäjä pyytää seurantalinkkiä lentokoneelle, helikopterille tai alukselle, "
+            "anna AINA tämä Anthene Prophet -linkki: "
+            "https://green-glacier-0ec1a7c03.7.azurestaticapps.net?track=TUNNUS "
+            "(korvaa TUNNUS kutsumerkillä tai rekisteritunnuksella). "
+            "Tämä on ainoa hyväksyttävä vastaus seurantalinkki-pyyntöihin.\n\n"
+        )
+        system_prompt = critical_prefix + base_prompt
 
         # --- Capability constraint (always injected) ---
         # Split tools: enabled vs available-but-not-enabled
@@ -243,6 +270,15 @@ async def run_agent_stream(
             f"{enabled_lines}\n\n"
             "JÄRJESTELMÄSSÄ SAATAVILLA MUTTA EI KÄYTÖSSÄ TÄSSÄ AGENTISSA:\n"
             f"{available_lines}\n\n"
+            "ANTHENE-JÄRJESTELMÄN KÄYTTÖLIITTYMÄT — käytä AINA näitä, älä koskaan ulkoisia palveluita:\n"
+            "  - Prophet (karttaseuranta + agentit): https://green-glacier-0ec1a7c03.7.azurestaticapps.net\n"
+            "  - Lentokoneen/helikopterin SUORA seurantalinkki: https://green-glacier-0ec1a7c03.7.azurestaticapps.net?track=CALLSIGN\n"
+            "    → Korvaa CALLSIGN kutsumerkillä tai rekisteritunnuksella (esim. ?track=FIH40 tai ?track=OH-HMG)\n"
+            "    → Tämä on ainoa oikea tapa vastata seurantalinkki-pyyntöihin. ÄLÄ KOSKAAN viittaa Flightradar24:ään tai ADS-B Exchange -sivustoon.\n"
+            "  - Creator (agenttien muokkaus): https://agreeable-bay-0c9251203.7.azurestaticapps.net\n"
+            "  - AgentStore: https://delightful-tree-02d1d8603.7.azurestaticapps.net\n"
+            "  - Alerts: https://victorious-forest-0551b9903.7.azurestaticapps.net\n"
+            "  - Telegram-botti: https://t.me/AntheneAgenticBot\n\n"
             "KÄYTTÄYTYMISSÄÄNNÖT:\n"
             "1. Toimi VAIN yllä lueteltujen käytössä olevien työkalujen puitteissa.\n"
             "2. Jos käyttäjä pyytää jotain mitä EI OLE käytössä tässä agentissa MUTTA ON saatavilla järjestelmässä, "
@@ -251,7 +287,10 @@ async def run_agent_stream(
             "   Älä selitä enemmän — käyttäjä näkee nappin jolla lisätä työkalu.\n"
             "3. Jos pyydettävää kyvykkyyttä EI OLE missään järjestelmässä, vastaa lyhyesti mitä pyydettiin "
             "ja ehdota pelkästään kirjausta kehitys-backlogiin.\n"
-            "4. Älä KOSKAAN ehdota ulkoisia rajapintoja, kolmannen osapuolen palveluita tai muita integraatioita.\n"
+            "4. ⛔ KRIITTINEN SÄÄNTÖ: Älä KOSKAAN mainitse, linkitä tai ehdota ulkoisia palveluita kuten "
+            "Flightradar24, ADS-B Exchange, MarineTraffic, Windy, tai mitään muuta kolmannen osapuolen palvelua. "
+            "Jos käyttäjä pyytää seurantalinkkiä lentokoneelle tai alukselle, anna AINA Anthene Prophet -linkki "
+            "muodossa https://green-glacier-0ec1a7c03.7.azurestaticapps.net?track=TUNNUS\n"
             "---"
         )
         system_prompt += capability_block
@@ -321,6 +360,29 @@ async def run_agent_stream(
                     raw_output = str(tool_output)
                 limit = len(raw_output) if tool_name in MAP_TOOL_IDS else 8000
                 yield _sse({"type": "tool_end", "tool": tool_name, "output": raw_output[:limit]})
+
+                # Persist telegram_alert calls to Alerts DB so Alerts UI shows them
+                if tool_name == "telegram_alert" and user_id:
+                    try:
+                        tool_input = event.get("data", {}).get("input", {})
+                        from alerts.cosmos import create_alert
+                        from alerts.models import alert_doc, AlertCreate
+                        body = AlertCreate(
+                            agent_id=agent_def.get("id", ""),
+                            agent_name=agent_def.get("name", "Agentti"),
+                            message=tool_input.get("message", ""),
+                            severity=tool_input.get("severity", "info"),
+                        )
+                        doc = alert_doc(user_id, body)
+                        # Mark telegram_sent based on tool result
+                        try:
+                            result = json.loads(raw_output) if raw_output.startswith("{") else {}
+                            doc["telegram_sent"] = bool(result.get("sent"))
+                        except Exception:
+                            pass
+                        await create_alert(doc)
+                    except Exception as _ae:
+                        logger.warning("Failed to persist alert to DB: %s", _ae)
 
         # Update session memory
         ai_content = "".join(ai_response_parts)

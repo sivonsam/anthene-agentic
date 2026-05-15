@@ -21,7 +21,9 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null)
   const [operatorPins, setOperatorPins] = useState([]) // agent IDs pinned to operator UI
   const [editingAgent, setEditingAgent] = useState(null)
-  const [testingAgent, setTestingAgent] = useState(null)
+  const [testingAgentId, setTestingAgentId] = useState(null) // store ID only; derive object from agents
+  // Always use the fresh agent object from the list
+  const testingAgent = agents.find(a => a.id === testingAgentId) || storeAgents.find(a => a.id === testingAgentId) || null
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [formLoading, setFormLoading] = useState(false)
@@ -120,9 +122,14 @@ export default function App() {
           }
         }
       } else {
-        await api.createAgent(formData)
+        const created = await api.createAgent(formData)
+        // Auto-open the newly created agent in test panel
+        if (created?.id) setTestingAgentId(created.id)
+        else setTestingAgentId(null)
       }
-      await loadData()
+      const freshAgents = await api.listMyAgents()
+      setAgents(freshAgents)
+      // testingAgent is derived from agents list — auto-updates via fresh data
       setEditingAgent(null)
       setView('Omat agentit')
     } catch (e) { setError(e.message) }
@@ -245,7 +252,7 @@ export default function App() {
                         <AgentCard key={a.id} agent={a}
                           onEdit={(ag) => { setEditingAgent(ag); setView('Luo agentti') }}
                           onDelete={handleDelete}
-                          onTest={(ag) => setTestingAgent(testingAgent?.id === ag.id ? null : ag)}
+                          onTest={(ag) => setTestingAgentId(testingAgentId === ag.id ? null : ag.id)}
                           onPinOperator={handlePinOperator}
                           isPinned={operatorPins.includes(a.id)}
                         />
@@ -349,7 +356,7 @@ export default function App() {
                     {storeAgents.map(a => (
                       <AgentCard key={a.id} agent={a} showOwner
                         onCopy={handleCopyFromStore}
-                        onTest={(ag) => setTestingAgent(testingAgent?.id === ag.id ? null : ag)}
+                        onTest={(ag) => setTestingAgentId(testingAgentId === ag.id ? null : ag.id)}
                       />
                     ))}
                   </div>
