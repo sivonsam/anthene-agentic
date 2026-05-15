@@ -183,7 +183,7 @@ footer strong{color:#3a5070}
   <span class="topbar-hex">⚡</span>
   <div>
     <div class="topbar-name">Anthene Agentic</div>
-    <div class="topbar-sub">Architecture · v2.0 · Sweden Central</div>
+    <div class="topbar-sub">Architecture · v2.5 · Sweden Central</div>
   </div>
   <div class="topbar-badges">
     <a class="back-link" href="/portal.html">← Portal</a>
@@ -246,6 +246,24 @@ footer strong{color:#3a5070}
       <span class="ql-arrow">↗</span>
     </a>
 
+    <a class="ql-card" href="https://victorious-forest-0551b9903.7.azurestaticapps.net" target="_blank" style="--ql-c:#ef4444">
+      <span class="ql-icon">🔔</span>
+      <div>
+        <div class="ql-label">Alerts UI</div>
+        <div class="ql-desc">Telegram-hälytykset · henkilökohtainen näkymä</div>
+      </div>
+      <span class="ql-arrow">↗</span>
+    </a>
+
+    <a class="ql-card" href="https://t.me/AntheneAgenticBot" target="_blank" style="--ql-c:#29b6f6">
+      <span class="ql-icon">📡</span>
+      <div>
+        <div class="ql-label">@AntheneAgenticBot</div>
+        <div class="ql-desc">Telegram · hälytykset henkilökohtaisesti</div>
+      </div>
+      <span class="ql-arrow">↗</span>
+    </a>
+
     <div class="ql-card" style="--ql-c:#ef4444;cursor:default">
       <span class="ql-icon">🔒</span>
       <div>
@@ -276,18 +294,20 @@ footer strong{color:#3a5070}
   <div class="arch-wrap">
 
     <div class="arch-layer layer-fe">
-      <div class="arch-label label-fe">🖥️ Frontend — Azure Static Web Apps</div>
+      <div class="arch-label label-fe">🖥️ Frontend — Azure Static Web Apps (×4)</div>
       <div class="arch-comps">
         <span class="ac ac-fe live">⚙️ Agent Creator</span>
-        <span class="ac ac-fe live">🏢 Operator Dashboard (Store)</span>
-        <span class="ac ac-fe live">✈️ Prophet · Lentoanalyysi</span>
-        <span class="ac ac-fe">🗺️ FlightMapView (MapLibre GL)</span>
+        <span class="ac ac-fe live">🏢 Anthene Agentic / Store</span>
+        <span class="ac ac-fe live">✈️ Prophet · Sessioagentti</span>
+        <span class="ac ac-fe live new">🔔 Alerts UI · Telegram-hälytykset</span>
+        <span class="ac ac-fe">🗺️ AgentMapPanel (MapLibre GL)</span>
+        <span class="ac ac-fe new">📡 Lentokone-seuranta kartalla</span>
+        <span class="ac ac-fe new">💬 Keskusteluhistorian pysyvyys</span>
         <span class="ac ac-fe new">🪟 AoiWindow · 3-välilehti</span>
         <span class="ac ac-fe new">🗺️ SituationalMap (Store)</span>
         <span class="ac ac-fe new">✚ QuickAgentModal</span>
         <span class="ac ac-fe">🤖 AgentConsultant · AOI-kartta</span>
         <span class="ac ac-fe">👤 AdminPanel · käyttäjähallinta</span>
-        <span class="ac ac-fe new">🔐 DevLogin · kirjautumislomake</span>
       </div>
     </div>
 
@@ -328,15 +348,15 @@ footer strong{color:#3a5070}
     <div class="arch-arrow">⬇ ⬇ ⬇</div>
 
     <div class="arch-layer layer-tools">
-      <div class="arch-label label-tools">🛠️ Tool Hub — 21 työkalua · Sisäinen Container App</div>
+      <div class="arch-label label-tools">🛠️ Tool Hub — 23 työkalua · Sisäinen Container App</div>
       <div class="arch-comps">
-        <span class="ac ac-tools">✈️ ADS-B Exchange (4)</span>
+        <span class="ac ac-tools">✈️ ADS-B Exchange (6)</span>
         <span class="ac ac-tools">🌊 MarineTraffic / AIS (3)</span>
         <span class="ac ac-tools">🌦️ FMI Sää (3)</span>
         <span class="ac ac-tools">🔥 EFFIS Tulipalot (2)</span>
         <span class="ac ac-tools">🛰️ NASA FIRMS (2)</span>
         <span class="ac ac-tools">📻 STUK Säteily (2)</span>
-        <span class="ac ac-tools">📡 Telegram (1)</span>
+        <span class="ac ac-tools new">📡 Telegram alert (1)</span>
         <span class="ac ac-tools">🗺️ Geocoding (1)</span>
         <span class="ac ac-tools">🌐 Web Search (1)</span>
         <span class="ac ac-tools">🧮 Calculator (1)</span>
@@ -369,9 +389,11 @@ footer strong{color:#3a5070}
       <div class="arch-comps">
         <span class="ac ac-infra">Azure Container Apps · greensea env</span>
         <span class="ac ac-infra">Azure Container Registry · antheneagentic</span>
-        <span class="ac ac-infra">3× Azure Static Web Apps</span>
+        <span class="ac ac-infra">4× Azure Static Web Apps</span>
         <span class="ac ac-infra">Azure Cosmos DB Serverless</span>
         <span class="ac ac-infra">Azure OpenAI · gpt-4o</span>
+        <span class="ac ac-infra new">Telegram Bot @AntheneAgenticBot</span>
+        <span class="ac ac-infra new">ADS-B Exchange Enterprise API (trial)</span>
         <span class="ac ac-infra">Azure AD B2C (tulossa)</span>
         <span class="ac ac-infra">VNet internal ingress</span>
       </div>
@@ -398,10 +420,17 @@ footer strong{color:#3a5070}
     &ensp;→&ensp;<span style="color:#c4b5fd;font-weight:700">6. GPT-4o</span> analysoi tulokset, päättää jatkoaskeleet
     &ensp;→&ensp;<span style="color:#60a5fa;font-weight:700">7. SSE stream</span> palauttaa tokenit + tool-tapahtumat reaaliajassa
     &ensp;→&ensp;<span style="color:#a29ae0;font-weight:700">8. Frontend</span> renderöi vastauksen streamattuna<br><br>
-    <span style="color:#fbbf24;font-weight:700">Karttavirta:</span>
+    <span style="color:#fbbf24;font-weight:700">Karttavirta (tool results → kartta):</span>
     Frontend <span style="color:#fbbf24">POST /api/tools/call/adsb_area</span>
     → API → Tool Hub → ADS-B Exchange
-    → GeoJSON features → MapLibre GL renderöi kartalla
+    → GeoJSON features → MapLibre GL renderöi kartalle<br><br>
+    <span style="color:#60a5fa;font-weight:700">Lentokone-seuranta:</span>
+    "Seuraa kartalla" → <span style="color:#60a5fa">POST /api/tools/call/adsb_by_callsign</span> (30s välein)
+    → sijainti päivitetään kartalle, sininen piste + trail-viiva, kartta seuraa automaattisesti<br><br>
+    <span style="color:#ef4444;font-weight:700">Telegram-hälytysvirta:</span>
+    Agentti kutsuu <span style="color:#ef4444">telegram_alert</span>-työkalua
+    → Tool Hub → Telegram Bot API → @AntheneAgenticBot
+    → henkilökohtainen kanava (chat_id per käyttäjä)
   </div>
 </div>
 </div>
@@ -433,6 +462,13 @@ footer strong{color:#3a5070}
       <span class="svc-url">green-glacier-0ec1a7c03.7.azurestaticapps.net</span>
       <div class="svc-desc">Täysi lentoanalyysialusta. Dashboard, Agentit, Sessiot, ✨ Lentoanalyysi-kartta. MapLibre GL Draw, AOI-polygonipiirto, useita samanaikaisia AoiWindow-paneeleita, AI-chat per AOI, automaattihälytykset.</div>
       <div class="svc-tags"><span class="stag">MapLibre GL</span><span class="stag">GL Draw</span><span class="stag">AoiWindow</span><span class="stag">ADS-B 5s</span><span class="stag">SSE</span></div>
+    </a>
+
+    <a class="svc" href="https://victorious-forest-0551b9903.7.azurestaticapps.net" target="_blank">
+      <div class="svc-head"><span class="svc-icon">🔔</span><span class="svc-name">Alerts UI</span><span class="env-tag et-pub">SWA · Standard</span></div>
+      <span class="svc-url">victorious-forest-0551b9903.7.azurestaticapps.net</span>
+      <div class="svc-desc">Henkilökohtainen hälytysnäkymä. Linkitä Telegram-tili @AntheneAgenticBot-botilla (/start -komento + linkityskoodi). Seuraa agentin lähettämiä hälytyksiä omalla kanavalla. Sama tyyli kuin Operator UI.</div>
+      <div class="svc-tags"><span class="stag">React 18</span><span class="stag">Telegram Bot API</span><span class="stag">Standard tier</span></div>
     </a>
 
     <a class="svc" href="https://anthene-api.greensea-93121b9f.swedencentral.azurecontainerapps.io/docs" target="_blank">
@@ -510,16 +546,18 @@ footer strong{color:#3a5070}
 ═══════════════════════════════════════════════════════ -->
 <div id="tab-tools" class="tab-pane">
 <div class="sec">
-  <div class="sec-title"><span class="sec-title-icon">🛠️</span> Työkalukataloogi — 21 työkalua</div>
+  <div class="sec-title"><span class="sec-title-icon">🛠️</span> Työkalukataloogi — 23 työkalua</div>
   <div class="tool-cats">
 
     <div class="cat-block">
-      <div class="cat-hdr"><span class="cat-ic">✈️</span><span class="cat-nm">Ilmaliikenne (ADS-B)</span><span class="cat-cnt">4 työkalua</span></div>
+      <div class="cat-hdr"><span class="cat-ic">✈️</span><span class="cat-nm">Ilmaliikenne (ADS-B)</span><span class="cat-cnt">6 työkalua</span></div>
       <div class="tools-grid">
         <div class="tool"><div class="tool-id">adsb_area</div><div class="tool-nm">ADS-B aluehaku</div><div class="tool-dc">Lentokoneet annetulla lat/lon/radius-alueella. Palauttaa callsign, tyyppi, korkeus, nopeus, sotilas-lippu.</div></div>
         <div class="tool"><div class="tool-id">adsb_flight</div><div class="tool-nm">Lennon tiedot</div><div class="tool-dc">Yksittäisen lennon tiedot ICAO hex-koodilla tai lentonumerolla.</div></div>
         <div class="tool"><div class="tool-id">adsb_trail</div><div class="tool-nm">Lentorata</div><div class="tool-dc">Lennon historiallinen reitti pistejonona. Visualisoidaan kartalle.</div></div>
         <div class="tool"><div class="tool-id">adsb_military</div><div class="tool-nm">Sotilaslentokoneet</div><div class="tool-dc">Sotilasluokiteltujen lentokoneiden haku alueelta.</div></div>
+        <div class="tool"><div class="tool-id">adsb_by_callsign</div><div class="tool-nm">Haku kutsukirjaimella</div><div class="tool-dc">Reaaliaikainen sijainti kutsumerkin perusteella. Käytetään karttaseurantaan.</div></div>
+        <div class="tool"><div class="tool-id">adsb_by_registration</div><div class="tool-nm">Haku rekisterillä</div><div class="tool-dc">Reaaliaikainen sijainti rekisteritunnuksen perusteella. Käytetään karttaseurantaan.</div></div>
       </div>
     </div>
 
@@ -556,7 +594,7 @@ footer strong{color:#3a5070}
       <div class="tools-grid">
         <div class="tool"><div class="tool-id">stuk_radiation</div><div class="tool-nm">STUK Säteily</div><div class="tool-dc">Säteilymittariverkosto — reaaliaikaiset annosnopeudet Suomessa.</div></div>
         <div class="tool"><div class="tool-id">stuk_stations</div><div class="tool-nm">STUK Asemat</div><div class="tool-dc">Kaikkien säteilymittausasemien lista ja sijainnit.</div></div>
-        <div class="tool"><div class="tool-id">telegram_notify</div><div class="tool-nm">Telegram-ilmoitus</div><div class="tool-dc">Lähetä viesti tai hälytys Telegram-kanavaan.</div></div>
+        <div class="tool"><div class="tool-id">telegram_alert</div><div class="tool-nm">Telegram-hälytys</div><div class="tool-dc">Lähetä hälytys käyttäjän henkilökohtaiseen Telegram-kanavaan @AntheneAgenticBot-botin kautta. chat_id tallennetaan käyttäjäprofiiliin.</div></div>
         <div class="tool"><div class="tool-id">map_geocode</div><div class="tool-nm">Geokoodaus</div><div class="tool-dc">Paikannimi → koordinaatit (Nominatim/OSM).</div></div>
         <div class="tool"><div class="tool-id">web_search</div><div class="tool-nm">Web-haku</div><div class="tool-dc">Reaaliaikainen verkkohaku agenttien käyttöön.</div></div>
         <div class="tool"><div class="tool-id">calculator</div><div class="tool-nm">Laskin</div><div class="tool-dc">Matemaattiset laskutoimitukset ja yksikkömuunnokset.</div></div>
@@ -667,11 +705,12 @@ footer strong{color:#3a5070}
     </div>
 
     <div class="infra-card">
-      <div class="infra-head"><span class="infra-icon">🌐</span><span class="infra-name">Static Web Apps (×3)</span><span class="infra-tier">Free tier</span></div>
+      <div class="infra-head"><span class="infra-icon">🌐</span><span class="infra-name">Static Web Apps (×4)</span><span class="infra-tier">Free + Standard</span></div>
       <div class="infra-detail">
-        <b>anthene-agentic-creator</b> → agreeable-bay<br>
-        <b>anthene-agentic-store</b> → delightful-tree<br>
-        <b>anthene-agentic-prophet</b> → green-glacier<br>
+        <b>anthene-agentic-creator</b> → agreeable-bay (Free)<br>
+        <b>anthene-agentic-store</b> → delightful-tree (Free)<br>
+        <b>anthene-agentic-prophet</b> → green-glacier (Free)<br>
+        <b>anthene-agentic-alerts</b> → victorious-forest (Standard)<br>
         Alue: East US 2 (SWA-oletus)
       </div>
     </div>
@@ -694,6 +733,27 @@ footer strong{color:#3a5070}
         Endpoint: AI Foundry<br>
         Käyttö: LangGraph runtime + AI-konsultti<br>
         Konfiguroitu: AZURE_OPENAI_* ympäristömuuttujat
+      </div>
+    </div>
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">📡</span><span class="infra-name">Telegram Bot</span><span class="infra-tier">@AntheneAgenticBot</span></div>
+      <div class="infra-detail">
+        Bot: <b>@AntheneAgenticBot</b><br>
+        Token: tallennettu Tool Hub -ympäristömuuttujaan<br>
+        Käyttö: agentin telegram_alert-työkalu lähettää viestejä<br>
+        Linkitys: käyttäjä lähettää /start + linkityskoodi botille<br>
+        chat_id tallennetaan Cosmos DB users-konttiin
+      </div>
+    </div>
+
+    <div class="infra-card">
+      <div class="infra-head"><span class="infra-icon">✈️</span><span class="infra-name">ADS-B Exchange Enterprise</span><span class="infra-tier">Trial</span></div>
+      <div class="infra-detail">
+        API Key: tallennettu Tool Hubiin (ADSB_API_KEY)<br>
+        Kattavuus: Eurooppa, Standard Resolution<br>
+        Trial: 11.5.–8.6.2026<br>
+        Endpoint: adsbexchange.com/api/aircraft/v2/
       </div>
     </div>
 

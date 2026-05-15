@@ -30,6 +30,8 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
     graph_type: 'react',
     memory_scope: 'conversation',
     aoi: null,
+    telegram_alerts: false,
+    telegram_alert_level: 'always',
     ...initial,
   })
 
@@ -40,6 +42,7 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
         name: '', description: '', system_prompt: '', tools: [],
         model: 'gpt-4o', visibility: 'private', category: 'yleinen',
         graph_type: 'react', memory_scope: 'conversation', aoi: null,
+        telegram_alerts: false, telegram_alert_level: 'always',
         ...initial,
       })
     }
@@ -51,6 +54,15 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
     set('tools', form.tools.includes(id)
       ? form.tools.filter(t => t !== id)
       : [...form.tools, id])
+  }
+
+  const toggleTelegramAlerts = (enabled) => {
+    setForm(f => {
+      const newTools = enabled
+        ? (f.tools.includes('telegram_alert') ? f.tools : [...f.tools, 'telegram_alert'])
+        : f.tools.filter(t => t !== 'telegram_alert')
+      return { ...f, telegram_alerts: enabled, tools: newTools }
+    })
   }
 
   const handleSubmit = (e) => {
@@ -138,6 +150,41 @@ export default function AgentForm({ tools = [], initial = null, onSave, onCancel
             </div>
           ))
         })()}
+      </div>
+
+      <div className="form-section telegram-section">
+        <label>📡 Telegram-hälytykset</label>
+        <div className="telegram-toggle-row">
+          <label className="toggle-switch">
+            <input type="checkbox" checked={form.telegram_alerts}
+              onChange={e => toggleTelegramAlerts(e.target.checked)} />
+            <span className="toggle-slider" />
+          </label>
+          <span className="toggle-label">
+            {form.telegram_alerts ? 'Käytössä — agentti lähettää hälytykset @AntheneAgenticBot-botiin' : 'Pois päältä'}
+          </span>
+        </div>
+        {form.telegram_alerts && (
+          <div className="telegram-config">
+            <div className="form-section" style={{ marginBottom: 0 }}>
+              <label>Hälytystaso</label>
+              <select value={form.telegram_alert_level} onChange={e => set('telegram_alert_level', e.target.value)}>
+                <option value="always">Aina — kaikki agentin havainnot</option>
+                <option value="warning">Varoitus — merkittävät poikkeamat</option>
+                <option value="critical">Kriittinen — vain vakavat tapahtumat</option>
+              </select>
+            </div>
+            <div className="telegram-hint">
+              <span>🔗</span>
+              <span>
+                Aktivoi ensin botti: avaa{' '}
+                <a href="https://t.me/AntheneAgenticBot" target="_blank" rel="noreferrer">@AntheneAgenticBot</a>
+                {' '}Telegramissa ja lähetä <code>/start</code>. Linkityskoodi löytyy{' '}
+                <a href="https://victorious-forest-0551b9903.7.azurestaticapps.net" target="_blank" rel="noreferrer">Alerts UI:sta ↗</a>
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="form-section">
