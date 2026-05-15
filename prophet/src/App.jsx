@@ -136,6 +136,11 @@ function Prophet({ user, getToken, onLogout }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sessionKey, setSessionKey] = useState(0) // remount TestChat on new session
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const chatDataRef = useRef({})
+  const getChatData = (id) => chatDataRef.current[id] || {}
+  const makeSaveChat = (id) => id
+    ? (msgs, trs) => { chatDataRef.current[id] = { messages: msgs, toolResults: trs } }
+    : undefined
 
   const api = createApiClient(getToken)
 
@@ -453,11 +458,14 @@ function Prophet({ user, getToken, onLogout }) {
           {/* ── Aktiivinen sessio ─────────────────────────────────────────── */}
           {view === 'sessio' && activeAgent && (
             <AktiivisenSessioView
-              key={sessionKey}
+              key={activeSessionId}
               agent={activeAgent}
               sessionId={activeSessionId}
               onRun={makeOnRun(activeAgent, activeSessionId)}
               onClose={closeSession}
+              initialMessages={getChatData(activeSessionId).messages}
+              initialToolResults={getChatData(activeSessionId).toolResults}
+              onSave={makeSaveChat(activeSessionId)}
             />
           )}
 
@@ -766,7 +774,7 @@ function SessiotView({ sessions, allAgentMap, onContinue, onLaunchNew }) {
 }
 
 // ── Aktiivinen sessio ─────────────────────────────────────────────────────────
-function AktiivisenSessioView({ agent, sessionId, onRun, onClose }) {
+function AktiivisenSessioView({ agent, sessionId, onRun, onClose, initialMessages, initialToolResults, onSave }) {
   return (
     <div className="sessio-view">
       <div className="sessio-chat-area">
@@ -781,7 +789,10 @@ function AktiivisenSessioView({ agent, sessionId, onRun, onClose }) {
           </button>
         </div>
         <div className="sessio-chat-body">
-          <TestChat agent={agent} onRun={onRun} />
+          <TestChat agent={agent} onRun={onRun}
+            initialMessages={initialMessages}
+            initialToolResults={initialToolResults}
+            onSave={onSave} />
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { loginRequest, DEV_MODE } from './config'
 import { createApiClient } from './api'
@@ -54,6 +54,11 @@ export default function App() {
   const [category, setCategory] = useState('Kaikki')
   const [sort, setSort] = useState('newest')
   const [previewAgent, setPreviewAgent] = useState(null)
+  const chatDataRef = useRef({})
+  const getChatData = (id) => chatDataRef.current[id] || {}
+  const makeSaveChat = (id) => id
+    ? (msgs, trs) => { chatDataRef.current[id] = { messages: msgs, toolResults: trs } }
+    : undefined
   const [toasts, setToasts] = useState([])
   const [devToken, setDevToken] = useState(() => {
     const token = initSSO()
@@ -421,6 +426,9 @@ export default function App() {
           onClose={() => setPreviewAgent(null)}
           onRun={handleRunTest(previewAgent)}
           onCopy={view === 'Store' ? handleCopy : undefined}
+          initialMessages={getChatData(previewAgent?.id).messages}
+          initialToolResults={getChatData(previewAgent?.id).toolResults}
+          onSave={makeSaveChat(previewAgent?.id)}
         />
       )}
 

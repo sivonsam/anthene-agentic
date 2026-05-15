@@ -14,16 +14,25 @@ const MAP_TOOLS = new Set([
   'map_geocode','detect_clusters','correlate_events',
 ])
 
-export default function TestChat({ agent, onRun }) {
-  const [messages, setMessages] = useState([])
+export default function TestChat({ agent, onRun, initialMessages = [], initialToolResults = [], onSave }) {
+  const [messages, setMessages] = useState(initialMessages)
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [activeTools, setActiveTools] = useState([])
   const [showMap, setShowMap] = useState(false)
-  const [toolResults, setToolResults] = useState([])
+  const [toolResults, setToolResults] = useState(initialToolResults)
   const [localAoi, setLocalAoi] = useState(null)
   const pendingToolInputs = useRef({})
   const bottomRef = useRef(null)
+  // Refs to latest values so unmount cleanup can save reliably
+  const messagesRef = useRef(initialMessages)
+  const toolResultsRef = useRef(initialToolResults)
+  useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => { toolResultsRef.current = toolResults }, [toolResults])
+  // Persist conversation history when component unmounts
+  useEffect(() => {
+    return () => { onSave?.(messagesRef.current, toolResultsRef.current) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const effectiveAoi = localAoi || agent?.aoi || null
   const isMapBound = effectiveAoi || agent?.tools?.some(t => MAP_TOOLS.has(t))
@@ -113,7 +122,7 @@ export default function TestChat({ agent, onRun }) {
       {/* Chat panel */}
       <div style={isMapBound ? { width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column' } : { display: 'flex', flexDirection: 'column', flex: 1 }}>
         <div className="test-chat-header">
-          <span>🧪 Testaa: <strong>{agent?.name || 'Agentti'}</strong></span>
+          <span>🧪 Testaa: <strong>{agent?.name || 'Uusi agentti'}</strong></span>
           {agent?.tools?.length > 0 && (
             <span className="tools-badge">{agent.tools.length} työkalua</span>
           )}

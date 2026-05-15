@@ -28,8 +28,8 @@ const MAP_TOOLS = new Set([
 ])
 
 // Slide-in right panel with full agent details + TestChat
-// Props: agent, onClose, onRun, onCopy
-export default function AgentPreview({ agent, onClose, onRun, onCopy }) {
+// Props: agent, onClose, onRun, onCopy, initialMessages, initialToolResults, onSave
+export default function AgentPreview({ agent, onClose, onRun, onCopy, initialMessages, initialToolResults, onSave }) {
   // Close on Escape key
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose?.() }
@@ -130,7 +130,10 @@ export default function AgentPreview({ agent, onClose, onRun, onCopy }) {
 
           {onRun && (
             <div className="preview-chat">
-              <TestChat key={agent?.id} agent={agent} onRun={onRun} />
+              <TestChat key={agent?.id} agent={agent} onRun={onRun}
+                initialMessages={initialMessages}
+                initialToolResults={initialToolResults}
+                onSave={onSave} />
             </div>
           )}
         </div>

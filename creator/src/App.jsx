@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { loginRequest, DEV_MODE, API_BASE } from './config'
 import { createApiClient } from './api'
@@ -25,6 +25,12 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [formLoading, setFormLoading] = useState(false)
+  // Persist conversation history across test-panel open/close, keyed by agent ID
+  const chatDataRef = useRef({})
+  const getChatData = (id) => chatDataRef.current[id] || {}
+  const makeSaveChat = (id) => id && id !== '__prefill__'
+    ? (msgs, trs) => { chatDataRef.current[id] = { messages: msgs, toolResults: trs } }
+    : undefined
   // 'consult' | 'manual' — create mode
   const [createMode, setCreateMode] = useState('consult')
   const [devToken, setDevToken] = useState(() => {
@@ -248,7 +254,10 @@ export default function App() {
                   )}
                 {testingAgent && (
                   <div className="test-panel-wrap" style={{ maxWidth: '100%' }}>
-                    <TestChat key={testingAgent?.id} agent={testingAgent} onRun={handleRunTest(testingAgent)} />
+                    <TestChat key={testingAgent?.id} agent={testingAgent} onRun={handleRunTest(testingAgent)}
+                      initialMessages={getChatData(testingAgent?.id).messages}
+                      initialToolResults={getChatData(testingAgent?.id).toolResults}
+                      onSave={makeSaveChat(testingAgent?.id)} />
                   </div>
                 )}
               </section>
@@ -314,7 +323,10 @@ export default function App() {
                       loading={formLoading}
                     />
                     {editingAgent && editingAgent.id !== '__prefill__' && (
-                      <TestChat key={editingAgent?.id} agent={editingAgent} onRun={handleRunTest(editingAgent)} />
+                      <TestChat key={editingAgent?.id} agent={editingAgent} onRun={handleRunTest(editingAgent)}
+                        initialMessages={getChatData(editingAgent?.id).messages}
+                        initialToolResults={getChatData(editingAgent?.id).toolResults}
+                        onSave={makeSaveChat(editingAgent?.id)} />
                     )}
                   </div>
                 )}
@@ -344,7 +356,10 @@ export default function App() {
                 )}
                 {testingAgent && (
                   <div className="test-panel-wrap" style={{ maxWidth: '100%' }}>
-                    <TestChat agent={testingAgent} onRun={handleRunTest(testingAgent)} />
+                    <TestChat key={testingAgent?.id} agent={testingAgent} onRun={handleRunTest(testingAgent)}
+                      initialMessages={getChatData(testingAgent?.id).messages}
+                      initialToolResults={getChatData(testingAgent?.id).toolResults}
+                      onSave={makeSaveChat(testingAgent?.id)} />
                   </div>
                 )}
               </section>

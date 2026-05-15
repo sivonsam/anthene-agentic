@@ -3,33 +3,36 @@ import LocationPickerModal from './LocationPickerModal'
 import AgentMapPanel from './AgentMapPanel'
 
 const MAP_TOOLS = new Set([
-  // Ilmaliikenne
   'adsb_area','adsb_military','adsb_emergency',
   'adsb_by_registration','adsb_by_callsign','adsb_by_squawk','adsb_by_type',
   'aircraft_trail','aircraft_detail',
   'opensky_area','opensky_aircraft',
-  // Sää
   'weather_area','fmi_observations','fmi_warnings','fmi_lightning',
-  // Tulipalot
   'effis_fires','firms_fires',
-  // Meriliikenne
   'vessels_area','vessels_bbox','vessel_detail',
-  // Säteily & Hälytykset
   'stuk_radiation','gdacs_alerts',
-  // Paikka & Analytiikka
   'map_geocode','detect_clusters','correlate_events',
 ])
 
-export default function TestChat({ agent, onRun }) {
-  const [messages, setMessages] = useState([])
+export default function TestChat({ agent, onRun, initialMessages = [], initialToolResults = [], onSave }) {
+  const [messages, setMessages] = useState(initialMessages)
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [activeTools, setActiveTools] = useState([])
   const [showMap, setShowMap] = useState(false)
-  const [toolResults, setToolResults] = useState([])
+  const [toolResults, setToolResults] = useState(initialToolResults)
   const [localAoi, setLocalAoi] = useState(null)
   const pendingToolInputs = useRef({})
   const bottomRef = useRef(null)
+  // Refs to latest values so unmount cleanup can save reliably
+  const messagesRef = useRef(initialMessages)
+  const toolResultsRef = useRef(initialToolResults)
+  useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => { toolResultsRef.current = toolResults }, [toolResults])
+  // Persist conversation history when component unmounts
+  useEffect(() => {
+    return () => { onSave?.(messagesRef.current, toolResultsRef.current) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const effectiveAoi = localAoi || agent?.aoi || null
   const isMapBound = effectiveAoi || agent?.tools?.some(t => MAP_TOOLS.has(t))
@@ -107,7 +110,7 @@ export default function TestChat({ agent, onRun }) {
   }
 
   return (
-    <div className="test-chat" style={isMapBound ? { display: 'flex', flexDirection: 'row', height: '100%' } : {}}>
+    <div className="test-chat" style={isMapBound ? { display: 'flex', flexDirection: 'row', height: 600, minHeight: 520 } : {}}>
 
       {/* Map panel — left side when map-bound */}
       {isMapBound && (
